@@ -34,12 +34,30 @@ struct Pomodoro {
 enum Alarm: Equatable {
     case focusDone(cycle: Int)
     case breakDone(nextCycle: Int)
+    case reminder(id: UUID, title: String)
 }
 
 struct Reminder: Codable, Identifiable {
     var id = UUID()
     var title: String
     var due: Date?
+    /// Rings (in the notch, plus a system notification as backup) when `due` arrives.
+    var alarm = true
+
+    init(title: String, due: Date?, alarm: Bool = true) {
+        self.title = title
+        self.due = due
+        self.alarm = alarm
+    }
+
+    // Reminders saved before `alarm` existed decode with it on.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        title = try c.decode(String.self, forKey: .title)
+        due = try c.decodeIfPresent(Date.self, forKey: .due)
+        alarm = try c.decodeIfPresent(Bool.self, forKey: .alarm) ?? true
+    }
 }
 
 struct InboxItem: Codable, Identifiable {
@@ -117,7 +135,7 @@ final class NotchState {
     private(set) var now = Date()
 
     // Persisted
-    var reminders: [Reminder]    { didSet { Store.save(Store.reminders, reminders) } }
+    var reminders: [Reminder]    { didSet { Store.save(Store.reminders, reminders); ReminderNotifier.sync(reminders) } }
     var inbox: [InboxItem]       { didSet { Store.save(Store.inbox, inbox) } }
     var snips: [Snip]            { didSet { Store.save(Store.snips, snips) } }
     var tasks: [WorkTask]        { didSet { Store.save(Store.tasks, tasks) } }
@@ -128,6 +146,10 @@ final class NotchState {
     // Transient
     var pomo = Pomodoro()
     var alarm: Alarm?
+    /// Alarms that fired while another one was showing.
+    private var alarmQueue: [Alarm] = []
+    /// Reminder alarms ring for due times in (lastReminderCheck, now]; starts at launch so missed ones stay quiet.
+    @ObservationIgnored private var lastReminderCheck = Date()
     var snipMode: SnipMode = .area
     var capturing = false
     var showSettings = false
@@ -161,6 +183,7 @@ final class NotchState {
         activeTask = Store.load(Store.active, default: nil)
         alertType = Store.load(Store.alert, default: .sound)
         variant = Store.load(Store.variant, default: .short)
+        ReminderNotifier.sync(reminders)
         startTicker()
     }
 
@@ -268,6 +291,36 @@ final class NotchState {
         if let task = activeTask, !task.overdue, d >= task.endsAt {
             activeTask?.overdue = true
         }
+
+        // Reminder alarms
+        let since = lastReminderCheck
+        lastReminderCheck = d
+        let due = reminders
+            .filter { r in r.alarm && r.due.map { $0 > since && $0 <= d } == true }
+            .sorted { $0.due! < $1.due! }
+        for r in due {
+            present(.reminder(id: r.id, title: r.title))
+        }
+    }
+
+    private func present(_ next: Alarm) {
+        if alarm == nil {
+            alarm = next
+            Alerts.start(alertType)   // rings until the last queued alarm is dismissed
+        } else {
+            alarmQueue.append(next)
+        }
+    }
+
+    /// Clears the current alarm and shows the next queued one, or collapses the notch.
+    private func dismissAlarm() {
+        if alarmQueue.isEmpty {
+            alarm = nil
+            Alerts.stop()
+            collapse()
+        } else {
+            alarm = alarmQueue.removeFirst()
+        }
     }
 
     private func finishPhase() {
@@ -275,10 +328,9 @@ final class NotchState {
         pomo.running = false
         pomo.remaining = 0
         if finished.isFocus { pomo.done = finished.cycle }
-        alarm = finished.isFocus
+        present(finished.isFocus
             ? .focusDone(cycle: finished.cycle)
-            : .breakDone(nextCycle: finished.cycle % 4 + 1)
-        Alerts.play(alertType)
+            : .breakDone(nextCycle: finished.cycle % 4 + 1))
     }
 
     // MARK: - Pomodoro actions
@@ -312,16 +364,30 @@ final class NotchState {
             begin(cycle == 4 ? .long : .short, cycle: pomo.cycle, done: pomo.done)
         case .breakDone:
             begin(.focus, cycle: pomo.cycle % 4 + 1, done: pomo.cycle == 4 ? 0 : pomo.done)
+        case .reminder(let id, _):
+            reminders.removeAll { $0.id == id }
         }
-        self.alarm = nil
-        collapse()
+        dismissAlarm()
     }
 
     func alarmSecondary() {
-        let c = pomo.cycle
-        pomo = Pomodoro(phase: .focus, cycle: c % 4 + 1, done: c == 4 ? 0 : pomo.done)
-        alarm = nil
-        collapse()
+        guard let alarm else { return }
+        switch alarm {
+        case .reminder(let id, _):
+            snoozeReminder(id)
+        case .focusDone, .breakDone:
+            let c = pomo.cycle
+            pomo = Pomodoro(phase: .focus, cycle: c % 4 + 1, done: c == 4 ? 0 : pomo.done)
+        }
+        dismissAlarm()
+    }
+
+    static let snoozeMinutes = 10
+
+    private func snoozeReminder(_ id: UUID) {
+        guard let i = reminders.firstIndex(where: { $0.id == id }) else { return }
+        reminders[i].due = Date().addingTimeInterval(Double(Self.snoozeMinutes * 60))
+        reminders[i].alarm = true
     }
 
     // MARK: - Reminders / Inbox
@@ -371,6 +437,13 @@ final class NotchState {
 
     func deleteReminder(_ id: UUID) {
         reminders.removeAll { $0.id == id }
+        alarmQueue.removeAll { if case .reminder(id, _) = $0 { true } else { false } }
+        if case .reminder(id, _) = alarm { dismissAlarm() }
+    }
+
+    func toggleReminderAlarm(_ id: UUID) {
+        guard let i = reminders.firstIndex(where: { $0.id == id }) else { return }
+        reminders[i].alarm.toggle()
     }
 
     // MARK: - Working on
@@ -400,6 +473,10 @@ final class NotchState {
         pomo.running = true
         pomo.endsAt = Date().addingTimeInterval(3)
         pomo.remaining = 3
+    }
+
+    func simulateReminderDue() {
+        addReminder(title: "Test reminder with a fairly long title to check the marquee", due: Date().addingTimeInterval(5))
     }
 
     /// Starts the last task with only 6 seconds of its planned time left.

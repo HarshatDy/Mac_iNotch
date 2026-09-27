@@ -18,9 +18,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     }
 
     /// Show the "Working On" time's-up banner even while the app counts as frontmost.
+    /// Reminder notifications are only a backup for when the app isn't running; the notch alarm covers them here.
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter,
                                             willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
-        [.banner, .sound]
+        notification.request.identifier.hasPrefix(ReminderNotifier.prefix) ? [] : [.banner, .sound]
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -38,6 +39,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         menu.addItem(withTitle: "Prototype controls", action: nil, keyEquivalent: "").isEnabled = false
         menu.addItem(withTitle: "End current timer in 3s", action: #selector(endTimerSoon), keyEquivalent: "").target = self
         menu.addItem(withTitle: "Start last task, ending in 6s", action: #selector(startTaskEndingSoon), keyEquivalent: "").target = self
+        menu.addItem(withTitle: "Add reminder due in 5s", action: #selector(reminderDueSoon), keyEquivalent: "").target = self
         menu.addItem(withTitle: "Finish working-on task", action: #selector(finishTask), keyEquivalent: "").target = self
         menu.addItem(.separator())
         #endif
@@ -49,4 +51,5 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     @objc private func endTimerSoon()     { NotchState.shared.simulateTimerEnd() }
     @objc private func startTaskEndingSoon() { NotchState.shared.simulateTaskEnding() }
     @objc private func finishTask()          { NotchState.shared.finishTask() }
+    @objc private func reminderDueSoon()     { NotchState.shared.simulateReminderDue() }
 }

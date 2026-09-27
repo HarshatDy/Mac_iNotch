@@ -48,12 +48,13 @@ extension Color {
 // MARK: - Icons (SF Symbol equivalents of the prototype's stroked SVGs)
 
 enum NIcon {
-    case bell, play, pause, reset, plus, tray, check, xmark, speaker, watch
+    case bell, bellSlash, play, pause, reset, plus, tray, check, xmark, speaker, watch
     case area, window, display, calendar, eye, scope, viewfinder, timer, chevronLeft, gear
 
     var symbol: String {
         switch self {
         case .bell:        return "bell"
+        case .bellSlash:   return "bell.slash"
         case .play:        return "play.fill"
         case .pause:       return "pause.fill"
         case .reset:       return "arrow.counterclockwise"
@@ -333,6 +334,76 @@ struct CardTitle<Title: View, Right: View>: View {
 extension CardTitle where Right == EmptyView {
     init(icon: NIcon, color: Color, @ViewBuilder title: () -> Title) {
         self.init(icon: icon, color: color, title: title) { EmptyView() }
+    }
+}
+
+// MARK: - Marquee
+
+/// Single-line text that scrolls horizontally when it doesn't fit, pausing at the start of each loop.
+/// Short text renders as a plain leading-aligned `Text`. Font and color come from the environment.
+struct Marquee: View {
+    let text: String
+    var gap: CGFloat = 32
+    var speed: CGFloat = 28       // points per second
+    var pause: Double = 1.6       // seconds held at the start of each pass
+
+    @State private var textWidth: CGFloat = 0
+    @State private var boxWidth: CGFloat = 0
+    @State private var offset: CGFloat = 0
+
+    private var overflows: Bool { textWidth > boxWidth + 0.5 }
+
+    var body: some View {
+        // Hidden copy sets the height and takes the available width.
+        Text(text)
+            .lineLimit(1)
+            .hidden()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { boxWidth = $0 }
+            .overlay(alignment: .leading) {
+                HStack(spacing: gap) {
+                    Text(text)
+                    if overflows { Text(text) }   // second copy makes the loop seamless
+                }
+                .lineLimit(1)
+                .fixedSize()
+                .offset(x: offset)
+            }
+            .background(alignment: .leading) {
+                Text(text)
+                    .lineLimit(1)
+                    .fixedSize()
+                    .hidden()
+                    .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { textWidth = $0 }
+            }
+            .mask {
+                if overflows {
+                    LinearGradient(stops: [.init(color: .black, location: 0),
+                                           .init(color: .black, location: 0.88),
+                                           .init(color: .clear, location: 1)],
+                                   startPoint: .leading, endPoint: .trailing)
+                } else {
+                    Rectangle()
+                }
+            }
+            .help(overflows ? text : "")
+            .task(id: overflows ? textWidth : -1) { await run() }
+    }
+
+    private func run() async {
+        withTransaction(Transaction(animation: nil)) { offset = 0 }
+        guard overflows else { return }
+        let distance = textWidth + gap
+        let duration = Double(distance / speed)
+        while !Task.isCancelled {
+            do {
+                try await Task.sleep(for: .seconds(pause))
+                withAnimation(.linear(duration: duration)) { offset = -distance }
+                try await Task.sleep(for: .seconds(duration))
+            } catch { break }
+            // The second copy now sits exactly where the first started, so the jump is invisible.
+            withTransaction(Transaction(animation: nil)) { offset = 0 }
+        }
     }
 }
 

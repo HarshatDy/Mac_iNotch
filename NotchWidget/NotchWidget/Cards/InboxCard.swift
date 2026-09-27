@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Quick capture for stray thoughts; each can be turned into a reminder or marked done.
+/// "Brain Dump": quick capture for stray thoughts; each can be turned into a reminder or marked done.
 struct InboxCard: View {
     @Environment(NotchState.self) private var state
     @State private var text = ""
@@ -10,7 +10,7 @@ struct InboxCard: View {
 
         Card {
             CardTitle(icon: .tray, color: NT.teal) {
-                Text("Inbox")
+                Text("Brain Dump")
             } right: {
                 if !items.isEmpty {
                     Text("\(items.count)")
@@ -24,28 +24,24 @@ struct InboxCard: View {
 
             NTextField(id: "inbox", placeholder: "Capture a thought…", text: $text, onSubmit: submit)
 
-            VStack(alignment: .leading, spacing: 0) {
-                if items.isEmpty {
-                    Text("All sorted.")
-                        .font(NT.font(12))
-                        .foregroundStyle(NT.tertiary)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 4)
-                }
-                ForEach(items.prefix(3)) { item in
-                    InboxRow(item: item)
-                }
-                if items.count > 3 {
-                    Text("\(items.count - 3) more to sort")
-                        .font(NT.font(11))
-                        .foregroundStyle(NT.tertiary)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 3)
+            // Scrolls once there are more thoughts than fit, instead of pushing the card out of the grid.
+            ScrollView(.vertical) {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    if items.isEmpty {
+                        Text("All sorted.")
+                            .font(NT.font(12))
+                            .foregroundStyle(NT.tertiary)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 4)
+                    }
+                    ForEach(items) { item in
+                        InboxRow(item: item)
+                    }
                 }
             }
+            .scrollIndicators(.automatic)
             .padding(.horizontal, -6)
             .frame(maxHeight: .infinity, alignment: .top)
-            .clipped()
         }
     }
 
@@ -64,10 +60,8 @@ private struct InboxRow: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Text(item.text)
+            Marquee(text: item.text)
                 .foregroundStyle(NT.label)
-                .lineLimit(1)
-                .frame(maxWidth: .infinity, alignment: .leading)
             Text(Fmt.ago(item.t, state.now))
                 .font(NT.font(11))
                 .foregroundStyle(NT.tertiary)

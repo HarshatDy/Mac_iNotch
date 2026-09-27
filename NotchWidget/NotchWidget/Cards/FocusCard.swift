@@ -9,7 +9,8 @@ struct FocusCard: View {
         let pomo = state.pomo
 
         Card {
-            CardTitle(icon: .timer, color: NT.orange) { Text("Focus") }
+            CardTitle(icon: .timer, color: NT.orange) { Text("Pomodoro") }
+                .help("25 min focus + 5 min break per cycle; a 15 min long break after cycle 4")
 
             HStack(spacing: 14) {
                 Ring(size: 112, stroke: 7, progress: pomo.progress, color: pomo.color) {
@@ -37,7 +38,7 @@ struct FocusCard: View {
                                     .frame(width: 9, height: 9)
                             }
                         }
-                        Text("Cycle \(pomo.cycle) of 4 · 25 min")
+                        Text("Cycle \(pomo.cycle) of 4 · \(pomo.phase.length / 60) min \(pomo.isFocus ? "focus" : "break")")
                             .font(NT.font(11))
                             .foregroundStyle(NT.secondary)
                     }
