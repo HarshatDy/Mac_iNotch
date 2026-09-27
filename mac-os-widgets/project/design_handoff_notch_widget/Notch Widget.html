@@ -1,0 +1,1056 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>macOS 26 Notch Widget</title>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --sf: -apple-system, 'Inter', BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+  }
+
+  html, body {
+    width: 100%; height: 100%;
+    overflow: hidden;
+    background: #000;
+    font-family: var(--sf);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wallpaper {
+    position: fixed; inset: 0;
+    background:
+      radial-gradient(ellipse 90% 70% at 15% 25%, oklch(0.20 0.10 275) 0%, transparent 55%),
+      radial-gradient(ellipse 70% 55% at 85% 65%, oklch(0.18 0.09 210) 0%, transparent 50%),
+      radial-gradient(ellipse 55% 45% at 55% 15%, oklch(0.16 0.07 310) 0%, transparent 50%),
+      linear-gradient(155deg, oklch(0.09 0.04 255) 0%, oklch(0.06 0.03 215) 55%, oklch(0.08 0.05 275) 100%);
+    animation: wallShift 24s ease-in-out infinite alternate;
+  }
+  @keyframes wallShift {
+    0%   { filter: hue-rotate(0deg) brightness(1); }
+    100% { filter: hue-rotate(18deg) brightness(1.04); }
+  }
+
+  .desktop-content {
+    position: fixed; inset: 0;
+    padding: 44px 20px 80px;
+    pointer-events: none;
+    display: flex; flex-direction: column; gap: 18px;
+    align-items: flex-end; justify-content: flex-start;
+  }
+  .desktop-icon {
+    width: 62px;
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    opacity: 0.65;
+  }
+  .desktop-icon-img {
+    width: 50px; height: 50px; border-radius: 13px;
+    background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.09);
+    backdrop-filter: blur(12px);
+    display: flex; align-items: center; justify-content: center; font-size: 22px;
+  }
+  .desktop-icon-label {
+    font-size: 10px; color: rgba(255,255,255,0.72);
+    text-shadow: 0 1px 4px rgba(0,0,0,0.9);
+    text-align: center; font-weight: 500; letter-spacing: -0.01em;
+  }
+
+  .dock {
+    position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%);
+    display: flex; align-items: flex-end; gap: 5px;
+    padding: 9px 13px; border-radius: 20px;
+    background: rgba(255,255,255,0.055);
+    backdrop-filter: blur(36px) saturate(1.9);
+    border: 1px solid rgba(255,255,255,0.12);
+    box-shadow: 0 0 0 0.5px rgba(255,255,255,0.05) inset, 0 8px 32px rgba(0,0,0,0.55), 0 2px 8px rgba(0,0,0,0.3);
+    pointer-events: none;
+  }
+  .dock-item {
+    width: 46px; height: 46px; border-radius: 11px;
+    display: flex; align-items: center; justify-content: center; font-size: 22px;
+    background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07);
+  }
+  .dock-sep { width: 1px; height: 30px; background: rgba(255,255,255,0.10); margin: 0 2px; align-self: center; }
+
+  .menubar {
+    position: fixed; top: 0; left: 0; right: 0; height: 28px;
+    display: flex; align-items: center; padding: 0 16px;
+    pointer-events: none; z-index: 5;
+  }
+  .menubar-left {
+    display: flex; gap: 18px; align-items: center;
+    font-size: 12px; font-weight: 500; color: rgba(255,255,255,0.78); letter-spacing: -0.01em;
+  }
+  .menubar-brand { font-weight: 600; }
+  .menubar-right {
+    margin-left: auto;
+    display: flex; gap: 13px; align-items: center;
+    font-size: 11.5px; font-weight: 500; color: rgba(255,255,255,0.7);
+    padding-right: 120px; padding-left: 120px;
+  }
+
+  #notch-root {
+    position: fixed; top: 0; left: 50%; transform: translateX(-50%);
+    z-index: 1000; display: flex; flex-direction: column; align-items: center;
+  }
+
+  /* Keyframes */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes vizBar {
+    0%, 100% { transform: scaleY(0.3); }
+    50%       { transform: scaleY(1); }
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.4; }
+  }
+</style>
+</head>
+<body>
+
+<div class="wallpaper"></div>
+
+<div class="desktop-content">
+  <div class="desktop-icon"><div class="desktop-icon-img">🗂️</div><div class="desktop-icon-label">Projects</div></div>
+  <div class="desktop-icon"><div class="desktop-icon-img">📸</div><div class="desktop-icon-label">Photos</div></div>
+  <div class="desktop-icon"><div class="desktop-icon-img">📝</div><div class="desktop-icon-label">Notes</div></div>
+  <div class="desktop-icon"><div class="desktop-icon-img">🎵</div><div class="desktop-icon-label">Music</div></div>
+</div>
+
+<div class="menubar">
+  <div class="menubar-left">
+    <span class="menubar-brand">&#63743;</span>
+    <span>Finder</span><span>File</span><span>Edit</span><span>View</span><span>Go</span><span>Window</span>
+  </div>
+  <div class="menubar-right">
+    <span>Sat 3 May</span><span>12:41</span>
+  </div>
+</div>
+
+<div class="dock">
+  <div class="dock-item">🔍</div><div class="dock-item">📁</div><div class="dock-item">🌐</div>
+  <div class="dock-item">📧</div><div class="dock-item">📅</div><div class="dock-item">🗒️</div>
+  <div class="dock-sep"></div>
+  <div class="dock-item">🎵</div><div class="dock-item">⚙️</div>
+</div>
+
+<div id="notch-root"></div>
+
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback, useMemo } = React;
+
+/* ─────────────────────────────────────────
+   LIQUID GLASS TOKENS
+───────────────────────────────────────── */
+const glass = {
+  // More frosted: lighter bg, heavier blur, stronger border
+  background: 'rgba(255,255,255,0.07)',
+  backdropFilter: 'blur(56px) saturate(2.4) brightness(1.08)',
+  WebkitBackdropFilter: 'blur(56px) saturate(2.4) brightness(1.08)',
+  border: '1px solid rgba(255,255,255,0.20)',
+  boxShadow: [
+    '0 0 0 0.5px rgba(255,255,255,0.10) inset',
+    '0 1px 0 rgba(255,255,255,0.26) inset',
+    '0 -1px 0 rgba(0,0,0,0.12) inset',
+    '0 24px 64px rgba(0,0,0,0.50)',
+    '0 4px 14px rgba(0,0,0,0.30)',
+  ].join(','),
+};
+
+const glassDeep = {
+  background: 'rgba(255,255,255,0.055)',
+  backdropFilter: 'blur(56px) saturate(2.4) brightness(1.06)',
+  WebkitBackdropFilter: 'blur(56px) saturate(2.4) brightness(1.06)',
+  border: '1px solid rgba(255,255,255,0.14)',
+  boxShadow: [
+    '0 0 0 0.5px rgba(255,255,255,0.07) inset',
+    '0 1px 0 rgba(255,255,255,0.18) inset',
+    '0 24px 64px rgba(0,0,0,0.60)',
+    '0 4px 14px rgba(0,0,0,0.35)',
+  ].join(','),
+};
+
+/* ─────────────────────────────────────────
+   MOCK DATA
+───────────────────────────────────────── */
+const TRACKS = [
+  { title: 'Midnight Rain',   artist: 'Taylor Swift',  album: 'Midnights',        progress: 0.42, duration: '3:42', color: '#9B59B6' },
+  { title: 'As It Was',       artist: 'Harry Styles',  album: "Harry's House",    progress: 0.61, duration: '2:37', color: '#E74C3C' },
+  { title: 'Blinding Lights', artist: 'The Weeknd',    album: 'After Hours',      progress: 0.28, duration: '3:20', color: '#E67E22' },
+  { title: 'Levitating',      artist: 'Dua Lipa',      album: 'Future Nostalgia', progress: 0.77, duration: '3:23', color: '#3498DB' },
+];
+
+const ACCENT_COLORS = {
+  blue:   'oklch(0.68 0.18 240)',
+  purple: 'oklch(0.68 0.18 300)',
+  green:  'oklch(0.72 0.18 145)',
+  rose:   'oklch(0.68 0.18 340)',
+  amber:  'oklch(0.78 0.16 65)',
+};
+
+/* ─────────────────────────────────────────
+   SMALL SHARED COMPONENTS
+───────────────────────────────────────── */
+const Divider = () => (
+  <div style={{ width: 1, alignSelf: 'stretch', background: 'rgba(255,255,255,0.09)', margin: '0 2px', flexShrink: 0 }} />
+);
+
+const SectionLabel = ({ children }) => (
+  <div style={{ fontSize: 9, fontWeight: 600, color: 'rgba(255,255,255,0.28)', letterSpacing: '0.07em', textTransform: 'uppercase', marginBottom: 7 }}>
+    {children}
+  </div>
+);
+
+const ProgressBar = ({ value, color, height = 3 }) => (
+  <div style={{ width: '100%', height, background: 'rgba(255,255,255,0.10)', borderRadius: height, overflow: 'hidden' }}>
+    <div style={{ width: `${Math.max(0, Math.min(1, value)) * 100}%`, height: '100%', borderRadius: height, background: color || 'rgba(255,255,255,0.65)', transition: 'width 0.6s ease' }} />
+  </div>
+);
+
+const GlassBtn = ({ children, size = 26, onClick, accent }) => {
+  const [hov, setHov] = useState(false);
+  return (
+    <button onClick={onClick}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        width: size, height: size, borderRadius: '50%', flexShrink: 0,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: hov ? (accent ? 'rgba(255,255,255,0.26)' : 'rgba(255,255,255,0.14)') : (accent ? 'rgba(255,255,255,0.16)' : 'rgba(255,255,255,0.07)'),
+        border: `1px solid rgba(255,255,255,${accent ? '0.28' : '0.12'})`,
+        cursor: 'pointer', transition: 'background 0.15s ease, transform 0.15s ease',
+        transform: hov ? 'scale(1.06)' : 'scale(1)',
+        backdropFilter: 'blur(12px)',
+      }}>
+      {children}
+    </button>
+  );
+};
+
+const ToggleSwitch = ({ on, onChange }) => {
+  const [hov, setHov] = useState(false);
+  return (
+    <button onClick={() => onChange(!on)}
+      onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
+      style={{
+        width: 36, height: 20, borderRadius: 10, padding: 2,
+        background: on ? 'rgba(48,209,88,0.80)' : 'rgba(255,255,255,0.11)',
+        border: '1px solid rgba(255,255,255,0.10)',
+        cursor: 'pointer', position: 'relative',
+        transition: 'background 0.2s ease',
+        flexShrink: 0,
+        transform: hov ? 'scale(1.04)' : 'scale(1)',
+      }}>
+      <div style={{
+        width: 15, height: 15, borderRadius: '50%',
+        background: 'rgba(255,255,255,0.96)',
+        position: 'absolute', top: '50%', transform: `translateY(-50%)`,
+        left: on ? 18 : 3,
+        transition: 'left 0.2s ease',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.28)',
+      }} />
+    </button>
+  );
+};
+
+/* ─────────────────────────────────────────
+   WIDGET: SPOTIFY
+───────────────────────────────────────── */
+const SpotifyWidget = ({ track, playing, onToggle, onNext, onPrev }) => {
+  const vizBars = [0.7, 1, 0.5, 0.85, 0.6];
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 9, width: 228 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+        {/* Art */}
+        <div style={{
+          width: 46, height: 46, borderRadius: 10, flexShrink: 0, overflow: 'hidden',
+          background: `linear-gradient(135deg, ${track.color}99, ${track.color}44)`,
+          border: '1px solid rgba(255,255,255,0.13)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          boxShadow: `0 4px 14px ${track.color}44`,
+          fontSize: 20,
+        }}>🎵</div>
+
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 600, color: 'rgba(255,255,255,0.94)', letterSpacing: '-0.02em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{track.title}</div>
+          <div style={{ fontSize: 10.5, color: 'rgba(255,255,255,0.46)', marginTop: 1, letterSpacing: '-0.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{track.artist}</div>
+        </div>
+
+        {/* Viz bars */}
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, height: 18, flexShrink: 0 }}>
+          {vizBars.map((h, i) => (
+            <div key={i} style={{
+              width: 3, borderRadius: 2,
+              background: playing ? track.color : 'rgba(255,255,255,0.18)',
+              height: playing ? `${h * 100}%` : '25%',
+              transformOrigin: 'bottom',
+              animation: playing ? `vizBar ${0.5 + i * 0.12}s ease-in-out infinite alternate ${i * 0.08}s` : 'none',
+              transition: 'background 0.3s',
+            }} />
+          ))}
+        </div>
+      </div>
+
+      {/* Progress */}
+      <ProgressBar value={track.progress} color={track.color} height={2.5} />
+
+      {/* Controls */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span style={{ fontSize: 9.5, color: 'rgba(255,255,255,0.30)', fontVariantNumeric: 'tabular-nums' }}>
+          1:{String(Math.floor(track.progress * 180 % 60)).padStart(2,'0')}
+        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <GlassBtn size={22} onClick={onPrev}>
+            <svg width="9" height="9" viewBox="0 0 9 9" fill="rgba(255,255,255,0.65)"><polygon points="8,0.5 3.5,4.5 8,8.5"/><rect x="0" y="0.5" width="2" height="8" rx="0.8"/></svg>
+          </GlassBtn>
+          <GlassBtn size={30} onClick={onToggle} accent>
+            {playing
+              ? <svg width="9" height="9" viewBox="0 0 9 9" fill="white"><rect x="0.5" y="0.5" width="3" height="8" rx="0.8"/><rect x="5.5" y="0.5" width="3" height="8" rx="0.8"/></svg>
+              : <svg width="9" height="9" viewBox="0 0 9 9" fill="white"><polygon points="1,0.5 8.5,4.5 1,8.5"/></svg>}
+          </GlassBtn>
+          <GlassBtn size={22} onClick={onNext}>
+            <svg width="9" height="9" viewBox="0 0 9 9" fill="rgba(255,255,255,0.65)"><polygon points="1,0.5 5.5,4.5 1,8.5"/><rect x="7" y="0.5" width="2" height="8" rx="0.8"/></svg>
+          </GlassBtn>
+        </div>
+        <span style={{ fontSize: 9.5, color: 'rgba(255,255,255,0.30)', fontVariantNumeric: 'tabular-nums' }}>{track.duration}</span>
+      </div>
+    </div>
+  );
+};
+
+/* ─────────────────────────────────────────
+   WIDGET: BATTERY
+───────────────────────────────────────── */
+const BatteryWidget = ({ pct, charging }) => {
+  const color = charging ? '#30D158' : pct < 20 ? '#FF453A' : pct < 50 ? '#FF9F0A' : '#30D158';
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: 130 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <svg width="28" height="14" viewBox="0 0 28 14" fill="none">
+          <rect x="0.5" y="0.5" width="24" height="13" rx="3.5" stroke="rgba(255,255,255,0.4)" strokeWidth="1"/>
+          <rect x="25" y="4" width="2.5" height="6" rx="1.5" fill="rgba(255,255,255,0.3)"/>
+          <rect x="2" y="2" width={Math.round(20 * pct / 100)} height="10" rx="2" fill={color}/>
+        </svg>
+        <div>
+          <div style={{ fontSize: 20, fontWeight: 700, color, letterSpacing: '-0.04em', lineHeight: 1 }}>{pct}%</div>
+          <div style={{ fontSize: 9.5, color: 'rgba(255,255,255,0.36)', marginTop: 1 }}>{charging ? '⚡ Charging' : '4h 23m left'}</div>
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 2.5 }}>
+        {[...Array(10)].map((_, i) => (
+          <div key={i} style={{
+            flex: 1, height: 5, borderRadius: 2.5,
+            background: i < Math.round(pct / 10) ? color : 'rgba(255,255,255,0.09)',
+            transition: 'background 0.4s',
+          }} />
+        ))}
+      </div>
+      <div style={{ fontSize: 9.5, color: 'rgba(255,255,255,0.26)' }}>MacBook Pro · {charging ? 'AC' : 'Battery'}</div>
+    </div>
+  );
+};
+
+/* ─────────────────────────────────────────
+   WIDGET: CLOCK
+───────────────────────────────────────── */
+const ClockWidget = ({ now }) => {
+  const h = now.getHours(), m = now.getMinutes(), s = now.getSeconds();
+  const hrDeg  = (h % 12) * 30 + m * 0.5;
+  const minDeg = m * 6 + s * 0.1;
+  const secDeg = s * 6;
+  const r = 30;
+  const hand = (deg, len, w, col) => {
+    const rad = (deg - 90) * Math.PI / 180;
+    return <line x1={r} y1={r} x2={r + len * Math.cos(rad)} y2={r + len * Math.sin(rad)}
+      stroke={col} strokeWidth={w} strokeLinecap="round" />;
+  };
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7, width: 90 }}>
+      <svg width={r*2} height={r*2} viewBox={`0 0 ${r*2} ${r*2}`}>
+        <circle cx={r} cy={r} r={r-1} fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.10)" strokeWidth="0.8"/>
+        {[...Array(12)].map((_, i) => {
+          const a = (i * 30 - 90) * Math.PI / 180;
+          const inner = i % 3 === 0 ? r - 6 : r - 4;
+          return <line key={i}
+            x1={r + inner * Math.cos(a)} y1={r + inner * Math.sin(a)}
+            x2={r + (r-1.5) * Math.cos(a)} y2={r + (r-1.5) * Math.sin(a)}
+            stroke="rgba(255,255,255,0.22)" strokeWidth={i % 3 === 0 ? 1.2 : 0.6} strokeLinecap="round" />;
+        })}
+        {hand(hrDeg,  15, 2.2, 'rgba(255,255,255,0.90)')}
+        {hand(minDeg, 20, 1.6, 'rgba(255,255,255,0.78)')}
+        {hand(secDeg, 22, 0.9, '#FF453A')}
+        <circle cx={r} cy={r} r={1.8} fill="rgba(255,255,255,0.9)"/>
+      </svg>
+      <div style={{ textAlign: 'center' }}>
+        <div style={{ fontSize: 12.5, fontWeight: 600, color: 'rgba(255,255,255,0.88)', letterSpacing: '-0.02em' }}>
+          {String(h).padStart(2,'0')}:{String(m).padStart(2,'0')}
+        </div>
+        <div style={{ fontSize: 9.5, color: 'rgba(255,255,255,0.36)', marginTop: 1 }}>
+          {now.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/* ─────────────────────────────────────────
+   WIDGET: WEATHER
+───────────────────────────────────────── */
+const WeatherWidget = () => (
+  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: 118 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ fontSize: 32, lineHeight: 1, filter: 'drop-shadow(0 2px 6px rgba(255,200,50,0.25))' }}>☀️</div>
+      <div>
+        <div style={{ fontSize: 24, fontWeight: 700, color: 'rgba(255,255,255,0.93)', letterSpacing: '-0.04em', lineHeight: 1 }}>22°</div>
+        <div style={{ fontSize: 9.5, color: 'rgba(255,255,255,0.38)' }}>Clear · SF</div>
+      </div>
+    </div>
+    <div style={{ display: 'flex', gap: 1.5 }}>
+      {['S','M','T','W','T'].map((d, i) => (
+        <div key={i} style={{ flex: 1, textAlign: 'center' }}>
+          <div style={{ fontSize: 8.5, color: 'rgba(255,255,255,0.26)', marginBottom: 2 }}>{d}</div>
+          <div style={{ fontSize: 9 }}>{['☀️','⛅','🌧️','☀️','⛅'][i]}</div>
+          <div style={{ fontSize: 8.5, color: 'rgba(255,255,255,0.42)', marginTop: 2 }}>{[22,19,17,24,21][i]}°</div>
+        </div>
+      ))}
+    </div>
+  </div>
+);
+
+/* ─────────────────────────────────────────
+   WIDGET: WIFI
+───────────────────────────────────────── */
+const WifiWidget = () => (
+  <div style={{ display: 'flex', flexDirection: 'column', gap: 9, width: 120 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{
+        width: 34, height: 34, borderRadius: 9, flexShrink: 0,
+        background: 'rgba(10,132,255,0.18)', border: '1px solid rgba(10,132,255,0.30)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <svg width="16" height="12" viewBox="0 0 16 12" fill="none">
+          {[10,7.5,5].map((r2, i) => (
+            <path key={i} d={`M${8 - r2},${12 - r2 * 0.7} Q8,${12 - r2 * 1.4} ${8 + r2},${12 - r2 * 0.7}`}
+              stroke={`rgba(255,255,255,${[0.9,0.6,0.3][i]})`} strokeWidth="1.4" strokeLinecap="round" fill="none"/>
+          ))}
+          <circle cx="8" cy="11" r="1.2" fill="rgba(255,255,255,0.9)"/>
+        </svg>
+      </div>
+      <div>
+        <div style={{ fontSize: 11.5, fontWeight: 600, color: 'rgba(255,255,255,0.88)', letterSpacing: '-0.02em' }}>Tahoe-5G</div>
+        <div style={{ fontSize: 9.5, color: '#0A84FF', marginTop: 1 }}>Connected</div>
+      </div>
+    </div>
+    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9.5 }}>
+      <div><div style={{ color: 'rgba(255,255,255,0.28)' }}>↓ DL</div><div style={{ color: 'rgba(255,255,255,0.65)', fontWeight: 500 }}>142 Mb</div></div>
+      <div><div style={{ color: 'rgba(255,255,255,0.28)' }}>↑ UL</div><div style={{ color: 'rgba(255,255,255,0.65)', fontWeight: 500 }}>38 Mb</div></div>
+      <div><div style={{ color: 'rgba(255,255,255,0.28)' }}>Ping</div><div style={{ color: 'rgba(255,255,255,0.65)', fontWeight: 500 }}>4 ms</div></div>
+    </div>
+  </div>
+);
+
+/* ─────────────────────────────────────────
+   WIDGET: CPU & RAM
+───────────────────────────────────────── */
+const useTicker = (interval = 2000) => {
+  const [tick, setTick] = useState(0);
+  useEffect(() => { const t = setInterval(() => setTick(n => n + 1), interval); return () => clearInterval(t); }, [interval]);
+  return tick;
+};
+
+const CpuWidget = () => {
+  const tick = useTicker(1800);
+  const [history, setHistory] = useState(() => [...Array(16)].map(() => 15 + Math.random() * 30));
+  useEffect(() => {
+    setHistory(prev => {
+      const next = [...prev.slice(1), 10 + Math.random() * 60];
+      return next;
+    });
+  }, [tick]);
+  const current = Math.round(history[history.length - 1]);
+  const peak = Math.max(...history);
+  const W = 80, H = 40;
+  const pts = history.map((v, i) => `${(i / (history.length - 1)) * W},${H - (v / 100) * H}`).join(' ');
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 7, width: 100 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+        <span style={{ fontSize: 20, fontWeight: 700, color: 'rgba(255,255,255,0.90)', letterSpacing: '-0.04em', lineHeight: 1 }}>{current}%</span>
+        <span style={{ fontSize: 9.5, color: 'rgba(255,255,255,0.36)' }}>CPU</span>
+      </div>
+      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{ overflow: 'visible' }}>
+        <defs>
+          <linearGradient id="cpuGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="rgba(100,180,255,0.45)"/>
+            <stop offset="100%" stopColor="rgba(100,180,255,0.02)"/>
+          </linearGradient>
+        </defs>
+        <polyline points={pts} fill="none" stroke="rgba(100,180,255,0.70)" strokeWidth="1.4" strokeLinejoin="round" strokeLinecap="round"/>
+        <polygon points={`0,${H} ${pts} ${W},${H}`} fill="url(#cpuGrad)"/>
+      </svg>
+      <div style={{ fontSize: 9.5, color: 'rgba(255,255,255,0.26)' }}>Peak {Math.round(peak)}% · M3 Pro</div>
+    </div>
+  );
+};
+
+const RamWidget = () => {
+  const tick = useTicker(3000);
+  const [used] = useState(11.4);
+  const total = 18;
+  const pct = used / total;
+  const color = pct > 0.85 ? '#FF453A' : pct > 0.65 ? '#FF9F0A' : 'rgba(100,180,255,0.85)';
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: 100 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+        <span style={{ fontSize: 20, fontWeight: 700, color: 'rgba(255,255,255,0.90)', letterSpacing: '-0.04em', lineHeight: 1 }}>{used}GB</span>
+        <span style={{ fontSize: 9.5, color: 'rgba(255,255,255,0.36)' }}>RAM</span>
+      </div>
+      <div style={{ position: 'relative', height: 6, background: 'rgba(255,255,255,0.09)', borderRadius: 3, overflow: 'hidden' }}>
+        <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${pct*100}%`, background: color, borderRadius: 3, transition: 'width 0.8s ease' }}/>
+      </div>
+      <div style={{ fontSize: 9.5, color: 'rgba(255,255,255,0.26)' }}>{total}GB total · {Math.round((total - used)*10)/10}GB free</div>
+    </div>
+  );
+};
+
+/* ─────────────────────────────────────────
+   WIDGET: VOLUME
+───────────────────────────────────────── */
+const VolumeWidget = ({ volume, setVolume }) => {
+  const bars = 12;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 9, width: 100 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+        <span style={{ fontSize: 20, fontWeight: 700, color: 'rgba(255,255,255,0.90)', letterSpacing: '-0.04em', lineHeight: 1 }}>{volume}%</span>
+        <span style={{ fontSize: 9.5, color: 'rgba(255,255,255,0.36)' }}>Volume</span>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 28 }}>
+        {[...Array(bars)].map((_, i) => {
+          const threshold = (i + 1) / bars;
+          const active = threshold <= volume / 100;
+          const barH = 30 + (i / bars) * 70;
+          return <div key={i} style={{
+            flex: 1, height: `${barH}%`, borderRadius: 2,
+            background: active ? 'rgba(255,255,255,0.70)' : 'rgba(255,255,255,0.10)',
+            transition: 'background 0.2s',
+          }}/>;
+        })}
+      </div>
+      <input type="range" min="0" max="100" value={volume}
+        onChange={e => setVolume(Number(e.target.value))}
+        style={{ width: '100%', accentColor: 'rgba(255,255,255,0.6)', cursor: 'pointer', height: 3 }}
+      />
+    </div>
+  );
+};
+
+/* ─────────────────────────────────────────
+   WIDGET: NOTIFICATIONS
+───────────────────────────────────────── */
+const NOTIFS = [
+  { app: 'Messages', text: 'Hey, are you free tonight?', time: '2m', dot: '#30D158' },
+  { app: 'Mail',     text: 'Invoice #2041 from Acme Co.', time: '8m', dot: '#0A84FF' },
+  { app: 'Slack',    text: '#design: New Figma file shared', time: '14m', dot: '#E01E5A' },
+];
+
+const NotificationsWidget = () => (
+  <div style={{ display: 'flex', flexDirection: 'column', gap: 7, width: 186 }}>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 1 }}>
+      <span style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.7)', letterSpacing: '-0.01em' }}>Notifications</span>
+      <span style={{ fontSize: 9.5, color: 'rgba(255,255,255,0.3)' }}>{NOTIFS.length} new</span>
+    </div>
+    {NOTIFS.map((n, i) => (
+      <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 7 }}>
+        <div style={{ width: 5, height: 5, borderRadius: '50%', background: n.dot, marginTop: 3, flexShrink: 0 }} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 10, fontWeight: 600, color: 'rgba(255,255,255,0.70)', letterSpacing: '-0.01em' }}>{n.app}</div>
+          <div style={{ fontSize: 9.5, color: 'rgba(255,255,255,0.40)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{n.text}</div>
+        </div>
+        <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.24)', flexShrink: 0 }}>{n.time}</span>
+      </div>
+    ))}
+  </div>
+);
+
+/* ─────────────────────────────────────────
+   WIDGET: DO NOT DISTURB
+───────────────────────────────────────── */
+const DndWidget = ({ dnd, setDnd }) => {
+  const [until, setUntil] = useState('1 hour');
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 9, width: 110 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.85)', letterSpacing: '-0.02em' }}>Focus</div>
+          <div style={{ fontSize: 9.5, color: dnd ? '#FF9F0A' : 'rgba(255,255,255,0.30)', marginTop: 1 }}>
+            {dnd ? `On · ${until}` : 'Off'}
+          </div>
+        </div>
+        <div style={{
+          width: 32, height: 32, borderRadius: 9,
+          background: dnd ? 'rgba(255,159,10,0.22)' : 'rgba(255,255,255,0.07)',
+          border: `1px solid ${dnd ? 'rgba(255,159,10,0.4)' : 'rgba(255,255,255,0.12)'}`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          cursor: 'pointer', transition: 'all 0.2s',
+          fontSize: 15,
+        }} onClick={() => setDnd(d => !d)}>
+          {dnd ? '🌙' : '🔔'}
+        </div>
+      </div>
+      {dnd && (
+        <div style={{ display: 'flex', gap: 4 }}>
+          {['1 hour','Tonight','All Day'].map(opt => (
+            <button key={opt} onClick={() => setUntil(opt)} style={{
+              flex: 1, fontSize: 8.5, padding: '3px 0', borderRadius: 5,
+              background: until === opt ? 'rgba(255,159,10,0.28)' : 'rgba(255,255,255,0.07)',
+              border: `1px solid ${until === opt ? 'rgba(255,159,10,0.4)' : 'rgba(255,255,255,0.09)'}`,
+              color: until === opt ? '#FF9F0A' : 'rgba(255,255,255,0.45)',
+              cursor: 'pointer', transition: 'all 0.15s', whiteSpace: 'nowrap',
+            }}>{opt}</button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* ─────────────────────────────────────────
+   WIDGET: MICROPHONE
+───────────────────────────────────────── */
+const MicWidget = ({ active, setActive }) => {
+  const tick = useTicker(150);
+  const [level, setLevel] = useState(0);
+  useEffect(() => {
+    if (active) setLevel(20 + Math.random() * 80);
+    else setLevel(0);
+  }, [tick, active]);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 9, width: 96 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.85)', letterSpacing: '-0.02em' }}>Mic</div>
+          <div style={{ fontSize: 9.5, color: active ? '#30D158' : 'rgba(255,255,255,0.30)', marginTop: 1 }}>
+            {active ? 'Active' : 'Muted'}
+          </div>
+        </div>
+        <div style={{
+          width: 32, height: 32, borderRadius: 9,
+          background: active ? 'rgba(48,209,88,0.18)' : 'rgba(255,255,255,0.07)',
+          border: `1px solid ${active ? 'rgba(48,209,88,0.35)' : 'rgba(255,255,255,0.12)'}`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          cursor: 'pointer', transition: 'all 0.2s',
+          animation: active ? 'pulse 2s ease-in-out infinite' : 'none',
+        }} onClick={() => setActive(a => !a)}>
+          <svg width="12" height="16" viewBox="0 0 12 16" fill="none">
+            <rect x="3" y="0" width="6" height="10" rx="3" fill={active ? '#30D158' : 'rgba(255,255,255,0.35)'} />
+            <path d="M1 8 Q1 13 6 13 Q11 13 11 8" stroke={active ? '#30D158' : 'rgba(255,255,255,0.25)'} strokeWidth="1.2" fill="none" strokeLinecap="round"/>
+            <line x1="6" y1="13" x2="6" y2="15.5" stroke={active ? '#30D158' : 'rgba(255,255,255,0.25)'} strokeWidth="1.2" strokeLinecap="round"/>
+            <line x1="3.5" y1="15.5" x2="8.5" y2="15.5" stroke={active ? '#30D158' : 'rgba(255,255,255,0.25)'} strokeWidth="1.2" strokeLinecap="round"/>
+          </svg>
+        </div>
+      </div>
+      <div style={{ height: 4, background: 'rgba(255,255,255,0.08)', borderRadius: 2, overflow: 'hidden' }}>
+        <div style={{ height: '100%', width: `${level}%`, background: '#30D158', borderRadius: 2, transition: 'width 0.12s ease' }}/>
+      </div>
+    </div>
+  );
+};
+
+/* ─────────────────────────────────────────
+   ALL WIDGET DEFINITIONS
+───────────────────────────────────────── */
+const ALL_WIDGETS = [
+  { id: 'spotify',       label: 'Spotify',       icon: '🎵', defaultOn: true  },
+  { id: 'battery',       label: 'Battery',       icon: '🔋', defaultOn: true  },
+  { id: 'clock',         label: 'Clock',         icon: '🕐', defaultOn: true  },
+  { id: 'weather',       label: 'Weather',       icon: '🌤', defaultOn: true  },
+  { id: 'wifi',          label: 'Wi-Fi',         icon: '📶', defaultOn: false },
+  { id: 'cpu',           label: 'CPU',           icon: '🖥', defaultOn: false },
+  { id: 'ram',           label: 'Memory',        icon: '💾', defaultOn: false },
+  { id: 'volume',        label: 'Volume',        icon: '🔊', defaultOn: false },
+  { id: 'notifications', label: 'Notifications', icon: '🔔', defaultOn: false },
+  { id: 'dnd',           label: 'Focus',         icon: '🌙', defaultOn: false },
+  { id: 'mic',           label: 'Microphone',    icon: '🎙', defaultOn: false },
+];
+
+const DEFAULT_ENABLED = Object.fromEntries(ALL_WIDGETS.map(w => [w.id, w.defaultOn]));
+
+/* ─────────────────────────────────────────
+   TWEAK DEFAULTS (persisted)
+───────────────────────────────────────── */
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "enabled_spotify": true,
+  "enabled_battery": true,
+  "enabled_clock": true,
+  "enabled_weather": true,
+  "enabled_wifi": false,
+  "enabled_cpu": false,
+  "enabled_ram": false,
+  "enabled_volume": false,
+  "enabled_notifications": true,
+  "enabled_dnd": false,
+  "enabled_mic": false,
+  "accentTint": "purple",
+  "blurStrength": 37
+}/*EDITMODE-END*/;
+
+/* ─────────────────────────────────────────
+   CONFIGURE OVERLAY (shown inside expanded notch)
+───────────────────────────────────────── */
+const ConfigureOverlay = ({ enabled, onToggle, accentTint, setAccentTint, onClose }) => (
+  <div style={{
+    position: 'absolute', inset: 0,
+    display: 'flex', flexDirection: 'column',
+    padding: '12px 16px 10px',
+    gap: 8,
+    animation: 'fadeUp 0.18s ease',
+    overflow: 'hidden',
+  }}>
+    {/* Header row with back arrow */}
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+      <button onClick={onClose} style={{
+        width: 22, height: 22, borderRadius: '50%',
+        border: '1px solid rgba(255,255,255,0.16)',
+        background: 'rgba(255,255,255,0.08)',
+        color: 'rgba(255,255,255,0.70)', cursor: 'pointer',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        flexShrink: 0, transition: 'background 0.15s',
+      }}>
+        <svg width="8" height="11" viewBox="0 0 8 11" fill="none">
+          <path d="M6.5 1.5 L2 5.5 L6.5 9.5" stroke="rgba(255,255,255,0.80)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      </button>
+      <span style={{ fontSize: 11.5, fontWeight: 600, color: 'rgba(255,255,255,0.75)', letterSpacing: '-0.02em' }}>Widgets</span>
+      {/* Accent dots — only visible here */}
+      <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 5 }}>
+        <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.28)', marginRight: 2 }}>Accent</span>
+        {Object.entries(ACCENT_COLORS).map(([name, color]) => (
+          <button key={name} onClick={() => setAccentTint(name)} style={{
+            width: 14, height: 14, borderRadius: '50%', background: color,
+            border: accentTint === name ? '2px solid rgba(255,255,255,0.88)' : '2px solid transparent',
+            cursor: 'pointer', transition: 'all 0.15s',
+            boxShadow: accentTint === name ? `0 0 5px ${color}` : 'none',
+          }}/>
+        ))}
+      </div>
+    </div>
+
+    {/* Widget chips — single row, wraps to two if needed, no scroll */}
+    <div style={{
+      display: 'flex', flexWrap: 'wrap', gap: 5, alignContent: 'flex-start',
+      flex: 1, overflow: 'hidden',
+    }}>
+      {ALL_WIDGETS.map(w => {
+        const on = enabled[w.id];
+        return (
+          <button key={w.id} onClick={() => onToggle(w.id)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 5, padding: '5px 9px',
+              borderRadius: 20, cursor: 'pointer',
+              background: on ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.05)',
+              border: `1px solid ${on ? 'rgba(255,255,255,0.24)' : 'rgba(255,255,255,0.09)'}`,
+              transition: 'all 0.16s ease',
+            }}>
+            <span style={{ fontSize: 11 }}>{w.icon}</span>
+            <span style={{ fontSize: 10.5, fontWeight: 500, color: on ? 'rgba(255,255,255,0.88)' : 'rgba(255,255,255,0.35)', letterSpacing: '-0.01em', whiteSpace: 'nowrap' }}>{w.label}</span>
+            {on && <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#30D158', flexShrink: 0 }} />}
+          </button>
+        );
+      })}
+    </div>
+    <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.18)', textAlign: 'center', flexShrink: 0 }}>Right-click notch anytime to return here</div>
+  </div>
+);
+
+/* ─────────────────────────────────────────
+   MAIN NOTCH WIDGET
+───────────────────────────────────────── */
+const NotchWidget = ({ enabled, accentTint, setAccentTint, onToggleWidget, tweakPanelOpen, onTweakClose }) => {
+  const [expanded, setExpanded]       = useState(false);
+  const [configuring, setConfiguring] = useState(false);
+  const [hovered, setHovered]         = useState(false);
+  const [playing, setPlaying]         = useState(true);
+  const [trackIdx, setTrackIdx]       = useState(0);
+  const [volume, setVolume]           = useState(62);
+  const [dnd, setDnd]                 = useState(false);
+  const [micActive, setMicActive]     = useState(false);
+  const [now, setNow]                 = useState(new Date());
+
+  const enterTimer = useRef(null);
+  const leaveTimer = useRef(null);
+
+  const track = TRACKS[trackIdx % TRACKS.length];
+
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const handleEnter = () => {
+    clearTimeout(leaveTimer.current);
+    setHovered(true);
+    enterTimer.current = setTimeout(() => setExpanded(true), 90);
+  };
+  const handleLeave = () => {
+    clearTimeout(enterTimer.current);
+    leaveTimer.current = setTimeout(() => {
+      if (!configuring) {
+        setExpanded(false);
+        setHovered(false);
+      }
+    }, 280);
+  };
+  const handleContextMenu = (e) => {
+    e.preventDefault();
+    clearTimeout(leaveTimer.current);
+    setHovered(true);
+    setExpanded(true);
+    setConfiguring(true);
+  };
+
+  // When Tweaks toolbar toggle fires, open configure mode inside notch
+  useEffect(() => {
+    if (tweakPanelOpen) {
+      setHovered(true);
+      setExpanded(true);
+      setConfiguring(true);
+    } else {
+      setConfiguring(false);
+      setExpanded(false);
+      setHovered(false);
+    }
+  }, [tweakPanelOpen]);
+
+  const enabledWidgets = ALL_WIDGETS.filter(w => enabled[w.id]);
+
+  // Base widget widths (full size)
+  const widgetWFull = {
+    spotify: 228, battery: 130, clock: 90, weather: 118, wifi: 120,
+    cpu: 100, ram: 100, volume: 100, notifications: 186, dnd: 110, mic: 96,
+  };
+
+  // Max available width for widgets (screen-safe, no scroll)
+  const MAX_NOTCH_W = Math.min(900, window.innerWidth - 80);
+  const PADDING = 40; // left+right padding inside notch
+  const DIVIDER = 1;
+  const availableW = MAX_NOTCH_W - PADDING;
+
+  // Scale widgets down proportionally if they don't fit
+  const naturalW = enabledWidgets.reduce((acc, w, i) =>
+    acc + (widgetWFull[w.id] || 110) + (i > 0 ? DIVIDER + 28 : 0), 0);
+  const scaleFactor = naturalW > availableW ? availableW / naturalW : 1;
+
+  const widgetW = Object.fromEntries(
+    Object.entries(widgetWFull).map(([k, v]) => [k, Math.floor(v * scaleFactor)])
+  );
+
+  const expandedW = Math.min(MAX_NOTCH_W, Math.max(280,
+    enabledWidgets.reduce((acc, w, i) =>
+      acc + (widgetW[w.id] || 90) + (i > 0 ? DIVIDER + 28 : 0), PADDING)
+  ));
+  const configW = Math.min(MAX_NOTCH_W, Math.max(480, 520));
+
+  const notchW  = configuring ? configW  : expanded ? expandedW : hovered ? 192 : 158;
+  const notchH  = configuring ? 190      : expanded ? 160        : hovered ? 36  : 30;
+  const notchR  = configuring ? '0 0 22px 22px' : expanded ? '0 0 24px 24px' : '0 0 16px 16px';
+
+  return (
+    <div
+      onMouseEnter={handleEnter}
+      onMouseLeave={handleLeave}
+      onContextMenu={handleContextMenu}
+      style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center' }}
+    >
+      <div style={{
+        position: 'relative', overflow: 'hidden',
+        width: notchW, height: notchH, borderRadius: notchR,
+        /* Smooth, no bounce */
+        transition: 'width 0.35s cubic-bezier(0.4,0,0.2,1), height 0.32s cubic-bezier(0.4,0,0.2,1), border-radius 0.28s ease',
+        ...glass,
+        backgroundImage: 'linear-gradient(180deg, rgba(255,255,255,0.13) 0%, rgba(255,255,255,0.04) 35%, rgba(255,255,255,0.01) 100%)',
+      }}>
+
+        {/* ── Collapsed dots ── */}
+        {!expanded && !hovered && (
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
+            {enabledWidgets.slice(0, 6).map(w => {
+              const dotColors = { spotify: '#1DB954', battery: '#30D158', clock: 'rgba(255,255,255,0.5)', weather: '#FF9F0A', wifi: '#0A84FF', cpu: '#64B4FF', ram: '#64B4FF', volume: 'rgba(255,255,255,0.5)', notifications: '#FF453A', dnd: '#FF9F0A', mic: '#30D158' };
+              return <div key={w.id} style={{ width: 4.5, height: 4.5, borderRadius: '50%', background: dotColors[w.id] || 'rgba(255,255,255,0.4)', opacity: 0.7 }} />;
+            })}
+          </div>
+        )}
+
+        {/* ── Hover compact row ── */}
+        {hovered && !expanded && (
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', gap: 7, padding: '0 12px', animation: 'fadeUp 0.15s ease' }}>
+            {enabled.spotify && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5, flex: 1, minWidth: 0 }}>
+                <svg width="11" height="11" viewBox="0 0 24 24"><circle cx="12" cy="12" r="12" fill="#1DB954"/><path d="M17.9 10.9C14.7 9 9.35 8.8 6.3 9.75c-.5.15-1-.15-1.15-.6-.15-.5.15-1 .6-1.15 3.55-1.05 9.4-.85 13.1 1.35.45.25.6.85.35 1.3-.25.35-.85.5-1.3.25zm-.1 2.8c-.25.4-.75.5-1.15.25-2.7-1.65-6.8-2.15-9.95-1.15-.4.1-.85-.1-.95-.5-.1-.4.1-.85.5-.95 3.65-1.1 8.15-.55 11.25 1.35.4.25.5.75.3 1zm-1.3 2.7c-.2.3-.6.4-.9.2-2.35-1.45-5.3-1.75-8.8-.95-.35.1-.65-.15-.75-.45-.1-.35.15-.65.45-.75 3.8-.85 7.1-.5 9.7 1.1.35.15.4.55.3.85z" fill="white"/></svg>
+                <span style={{ fontSize: 10.5, color: 'rgba(255,255,255,0.82)', fontWeight: 500, letterSpacing: '-0.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{track.title}</span>
+              </div>
+            )}
+            {enabled.battery && <span style={{ fontSize: 10.5, color: '#30D158', fontWeight: 600, flexShrink: 0 }}>78%</span>}
+            {enabled.clock && <span style={{ fontSize: 10.5, color: 'rgba(255,255,255,0.55)', fontWeight: 500, flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{String(now.getHours()).padStart(2,'0')}:{String(now.getMinutes()).padStart(2,'0')}</span>}
+          </div>
+        )}
+
+        {/* ── Configure overlay ── */}
+        {configuring && (
+          <ConfigureOverlay
+            enabled={enabled}
+            onToggle={onToggleWidget}
+            accentTint={accentTint}
+            setAccentTint={setAccentTint}
+            onClose={() => { setConfiguring(false); setExpanded(false); setHovered(false); }}
+          />
+        )}
+
+        {/* ── Expanded widget panels ── */}
+        {expanded && !configuring && (
+          <div style={{
+            position: 'absolute', inset: 0,
+            display: 'flex', alignItems: 'center',
+            padding: '0 14px',
+            gap: 0,
+            animation: 'fadeUp 0.22s ease',
+            overflow: 'hidden', // NO scroll
+          }}>
+            {enabledWidgets.map((w, i) => {
+              const scale = scaleFactor < 1 ? scaleFactor : 1;
+              return (
+                <React.Fragment key={w.id}>
+                  {i > 0 && <Divider />}
+                  <div style={{
+                    padding: `0 ${Math.max(6, Math.round(14 * scale))}px`,
+                    flexShrink: 0,
+                    transform: scale < 0.85 ? `scale(${scale})` : 'none',
+                    transformOrigin: 'center center',
+                  }}>
+                    {w.id === 'spotify'       && <SpotifyWidget track={track} playing={playing} onToggle={() => setPlaying(p=>!p)} onNext={() => setTrackIdx(idx=>idx+1)} onPrev={() => setTrackIdx(idx=>Math.max(0,idx-1))} />}
+                    {w.id === 'battery'       && <BatteryWidget pct={78} charging={false} />}
+                    {w.id === 'clock'         && <ClockWidget now={now} />}
+                    {w.id === 'weather'       && <WeatherWidget />}
+                    {w.id === 'wifi'          && <WifiWidget />}
+                    {w.id === 'cpu'           && <CpuWidget />}
+                    {w.id === 'ram'           && <RamWidget />}
+                    {w.id === 'volume'        && <VolumeWidget volume={volume} setVolume={setVolume} />}
+                    {w.id === 'notifications' && <NotificationsWidget />}
+                    {w.id === 'dnd'           && <DndWidget dnd={dnd} setDnd={setDnd} />}
+                    {w.id === 'mic'           && <MicWidget active={micActive} setActive={setMicActive} />}
+                  </div>
+                </React.Fragment>
+              );
+            })}
+
+            {/* Gear — configure */}
+            <div style={{ marginLeft: 'auto', paddingLeft: 8, flexShrink: 0 }}>
+              <GlassBtn size={20} onClick={(e) => { e.stopPropagation(); setConfiguring(true); }}>
+                <svg width="9" height="9" viewBox="0 0 10 10" fill="none">
+                  <circle cx="5" cy="5" r="1.8" stroke="rgba(255,255,255,0.55)" strokeWidth="1"/>
+                  <path d="M5 0.5v1.5M5 8v1.5M0.5 5h1.5M8 5h1.5M1.7 1.7l1 1M7.3 7.3l1 1M8.3 1.7l-1 1M2.7 7.3l-1 1" stroke="rgba(255,255,255,0.55)" strokeWidth="0.9" strokeLinecap="round"/>
+                </svg>
+              </GlassBtn>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Soft ambient glow */}
+      <div style={{
+        position: 'absolute',
+        top: notchH - 6,
+        left: '50%', transform: 'translateX(-50%)',
+        width: notchW * 0.6,
+        height: 30,
+        background: `radial-gradient(ellipse, ${ACCENT_COLORS[accentTint] || 'rgba(120,160,255,0.10)'} 0%, transparent 70%)`,
+        opacity: expanded ? 0.35 : 0.15,
+        pointerEvents: 'none',
+        transition: 'all 0.35s ease',
+        filter: 'blur(6px)',
+      }}/>
+
+      <div style={{ position: 'absolute', bottom: -18, left: '50%', transform: 'translateX(-50%)', whiteSpace: 'nowrap', pointerEvents: 'none' }}>
+        {!expanded && !configuring && (
+          <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.16)', letterSpacing: '0.02em' }}>hover · right-click to configure</span>
+        )}
+      </div>
+    </div>
+  );
+};
+
+/* ─────────────────────────────────────────
+   TWEAKS PANEL — host protocol only
+   Widget config lives inside the notch.
+   This panel just bridges the Tweaks toggle
+   by opening the notch configure mode.
+───────────────────────────────────────── */
+
+/* ─────────────────────────────────────────
+   ROOT APP
+───────────────────────────────────────── */
+const App = () => {
+  const [tweaks, setTweaksState] = useState(() => {
+    try {
+      const saved = localStorage.getItem('notch_tweaks_v2');
+      return saved ? { ...TWEAK_DEFAULTS, ...JSON.parse(saved) } : { ...TWEAK_DEFAULTS };
+    } catch { return { ...TWEAK_DEFAULTS }; }
+  });
+  const [tweakPanelOpen, setTweakPanelOpen] = useState(false);
+
+  const setTweak = (key, val) => {
+    setTweaksState(prev => {
+      const next = { ...prev, [key]: val };
+      try { localStorage.setItem('notch_tweaks_v2', JSON.stringify(next)); } catch {}
+      window.parent.postMessage({ type: '__edit_mode_set_keys', edits: next }, '*');
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.data?.type === '__activate_edit_mode')   setTweakPanelOpen(true);
+      if (e.data?.type === '__deactivate_edit_mode') setTweakPanelOpen(false);
+    };
+    window.addEventListener('message', handler);
+    window.parent.postMessage({ type: '__edit_mode_available' }, '*');
+    return () => window.removeEventListener('message', handler);
+  }, []);
+
+  const enabled = useMemo(() => Object.fromEntries(
+    ALL_WIDGETS.map(w => [w.id, !!tweaks[`enabled_${w.id}`]])
+  ), [tweaks]);
+
+  const accentTint    = tweaks.accentTint || 'blue';
+  const setAccentTint = (v) => setTweak('accentTint', v);
+
+  return (
+    <NotchWidget
+      enabled={enabled}
+      accentTint={accentTint}
+      setAccentTint={setAccentTint}
+      onToggleWidget={(id) => setTweak(`enabled_${id}`, !tweaks[`enabled_${id}`])}
+      tweakPanelOpen={tweakPanelOpen}
+      onTweakClose={() => {
+        setTweakPanelOpen(false);
+        window.parent.postMessage({ type: '__edit_mode_dismissed' }, '*');
+      }}
+    />
+  );
+};
+
+ReactDOM.createRoot(document.getElementById('notch-root')).render(<App />);
+</script>
+</body>
+</html>

@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Notch Widget</title>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script>
+window.NW_WALL = 'radial-gradient(ellipse 80% 65% at 18% 30%, oklch(0.42 0.12 265) 0%, transparent 60%), radial-gradient(ellipse 70% 60% at 82% 70%, oklch(0.40 0.10 215) 0%, transparent 58%), radial-gradient(ellipse 60% 50% at 55% 10%, oklch(0.34 0.09 300) 0%, transparent 55%), linear-gradient(160deg, oklch(0.22 0.05 260) 0%, oklch(0.16 0.04 225) 60%, oklch(0.20 0.06 280) 100%)';
+</script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--sf:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro","Helvetica Neue",Helvetica,sans-serif}
+html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:var(--sf);-webkit-font-smoothing:antialiased;color:rgba(255,255,255,.92)}
+a{color:#0A84FF;text-decoration:none}a:hover{color:#409CFF}
+.wallpaper{position:fixed;inset:0}
+.menubar{position:fixed;top:0;left:0;right:0;height:32px;display:flex;align-items:center;padding:0 18px;z-index:5;pointer-events:none;font:500 13px var(--sf);color:rgba(255,255,255,.88);text-shadow:0 0 8px rgba(0,0,0,.25)}
+.menubar-left{display:flex;gap:20px;align-items:center}.menubar-left b{font-weight:700}
+.menubar-right{margin-left:auto;display:flex;gap:14px;align-items:center;font-variant-numeric:tabular-nums}
+#root{position:fixed;top:0;left:50%;transform:translateX(-50%);z-index:1000}
+.nb{height:28px;padding:0 14px;border-radius:14px;border:0;display:inline-flex;align-items:center;justify-content:center;gap:6px;font:500 13px/1 var(--sf);letter-spacing:-.01em;cursor:default;transition:background .15s,transform .12s,opacity .15s;white-space:nowrap;color:#fff}
+.nb:active{transform:scale(.97)}.nb:disabled{opacity:.35;pointer-events:none}
+.nb-prom{background:#0A84FF;box-shadow:inset 0 .5px 0 rgba(255,255,255,.3)}.nb-prom:hover{background:#2491FF}
+.nb-glass{background:rgba(255,255,255,.12);color:rgba(255,255,255,.92);box-shadow:inset 0 .5px 0 rgba(255,255,255,.18)}.nb-glass:hover{background:rgba(255,255,255,.18)}
+.nb-sm{height:24px;padding:0 10px;font-size:12px;border-radius:12px}
+.nb-icon{width:28px;padding:0}.nb-icon.nb-sm{width:24px}
+.nb:focus-visible,.nmini:focus-visible{outline:none;box-shadow:0 0 0 3px rgba(10,132,255,.55)}
+.ntf{width:100%;height:30px;border-radius:10px;border:0;background:rgba(255,255,255,.07);box-shadow:inset 0 0 0 .5px rgba(255,255,255,.14);color:rgba(255,255,255,.92);font:400 13px var(--sf);letter-spacing:-.01em;padding:0 10px;outline:none;transition:box-shadow .15s,background .15s}
+.ntf::placeholder{color:rgba(235,235,245,.34)}
+.ntf:focus{background:rgba(255,255,255,.09);box-shadow:inset 0 0 0 .5px rgba(10,132,255,.9),0 0 0 3px rgba(10,132,255,.35)}
+.ncard{background:rgba(255,255,255,.055);border-radius:18px;box-shadow:inset 0 0 0 .5px rgba(255,255,255,.08);padding:12px;min-width:0;min-height:0;display:flex;flex-direction:column;gap:10px}
+.ntitle{display:flex;align-items:center;gap:6px;font:600 12px var(--sf);color:rgba(235,235,245,.62);white-space:nowrap;min-width:0}
+.nrow{display:flex;align-items:center;gap:8px;height:26px;padding:0 6px;border-radius:7px;font:400 12px var(--sf);position:relative}
+.nrow:hover{background:rgba(255,255,255,.06)}
+.nrow-time{color:rgba(235,235,245,.38);font-size:11px;transition:opacity .12s}
+.nrow-act{position:absolute;right:4px;display:flex;gap:2px;opacity:0;transition:opacity .12s}
+.nrow:hover .nrow-act{opacity:1}.nrow:hover .nrow-time{opacity:0}
+.nmini{width:22px;height:22px;border-radius:11px;border:0;background:rgba(255,255,255,.1);color:rgba(255,255,255,.85);display:flex;align-items:center;justify-content:center;cursor:default}
+.nmini:hover{background:rgba(255,255,255,.2)}
+.nthumb{position:relative;width:78px;height:56px;border-radius:8px;background:rgba(255,255,255,.04);display:flex;align-items:center;justify-content:center;cursor:default;transition:transform .15s}
+.nthumb:hover{transform:scale(1.03)}
+.nthumb-x{position:absolute;top:-6px;right:-6px;width:18px;height:18px;background:rgba(60,60,66,.95);opacity:0;transition:opacity .12s}
+.nthumb:hover .nthumb-x{opacity:1}
+.nopt{border:0;background:rgba(255,255,255,.04);border-radius:14px;padding:8px;text-align:left;display:flex;flex-direction:column;gap:9px;cursor:default;color:inherit;box-shadow:inset 0 0 0 .5px rgba(255,255,255,.1);transition:box-shadow .2s,background .2s}
+.nopt:hover{background:rgba(255,255,255,.07)}
+.nopt[data-on="1"]{box-shadow:inset 0 0 0 2px #0A84FF;background:rgba(10,132,255,.08)}
+.nradio{width:14px;height:14px;border-radius:7px;margin-top:1px;flex-shrink:0;box-shadow:inset 0 0 0 1px rgba(255,255,255,.3);transition:all .2s}
+.nopt[data-on="1"] .nradio{background:#fff;box-shadow:inset 0 0 0 4.5px #0A84FF}
+.nchip{position:relative;height:22px;padding:0 9px;border-radius:11px;background:rgba(255,255,255,.08);font:500 11px var(--sf);color:rgba(235,235,245,.75);display:flex;align-items:center;gap:5px}
+.nchip-x{width:14px;height:14px;border-radius:7px;border:0;background:rgba(255,255,255,.18);color:#fff;display:none;align-items:center;justify-content:center;cursor:default;margin-right:-4px}
+.nchip:hover .nchip-x{display:flex}
+.nlink{border:0;background:none;font:500 12px var(--sf);color:#0A84FF;cursor:default}.nlink:hover{color:#409CFF}
+.nmini:disabled{opacity:.3}
+.proto{position:fixed;left:16px;bottom:16px;z-index:900;padding:12px;border-radius:16px;background:rgba(30,30,34,.55);backdrop-filter:blur(30px) saturate(1.6);-webkit-backdrop-filter:blur(30px) saturate(1.6);box-shadow:inset 0 0 0 .5px rgba(255,255,255,.14),0 10px 30px rgba(0,0,0,.35);display:flex;flex-direction:column;gap:6px;width:220px}
+.proto .nb{overflow:hidden;text-overflow:ellipsis;display:block;text-align:left;line-height:24px}
+.proto-t{font:600 11px var(--sf);color:rgba(235,235,245,.5);margin-bottom:2px}
+.proto .nb{width:100%;justify-content:flex-start}
+@keyframes nwIn{from{opacity:0;transform:scale(.98);filter:blur(6px)}to{opacity:1;transform:none;filter:none}}
+@keyframes nwFade{from{opacity:0}to{opacity:1}}
+@keyframes nwPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.45;transform:scale(.9)}}
+@keyframes nwFlash{from{opacity:.85}to{opacity:0}}
+@keyframes nwGlow{0%,100%{box-shadow:0 0 0 .5px rgba(255,214,10,.35),0 6px 22px rgba(255,214,10,.14),0 20px 50px rgba(0,0,0,.45)}50%{box-shadow:0 0 0 1px rgba(255,214,10,.7),0 8px 40px rgba(255,214,10,.38),0 20px 50px rgba(0,0,0,.45)}}
+.nudging{animation:nwGlow 3.2s ease-in-out infinite}
+</style>
+</head>
+<body>
+<div class="wallpaper" id="wall"></div>
+<div class="menubar">
+<div class="menubar-left"><b>Finder</b><span>File</span><span>Edit</span><span>View</span><span>Go</span><span>Window</span><span>Help</span></div>
+<div class="menubar-right" id="mb-clock"></div>
+</div>
+<div id="root"></div>
+<script>document.getElementById('wall').style.background = window.NW_WALL;</script>
+<script type="text/babel" src="notch/ui.jsx"></script>
+<script type="text/babel" src="notch/modules.jsx"></script>
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback } = React;
+
+const FOCUS = 25 * 60, SHORT = 5 * 60, LONG = 15 * 60;
+const HW_W = 184, H0 = 32;
+let uid = 100;
+
+const load = (k, d) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } };
+const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
+
+const seedReminders = () => {
+  const n = Date.now();
+  const tm = new Date(); tm.setDate(tm.getDate() + 1); tm.setHours(18, 0, 0, 0);
+  return [
+    { id: 1, title: 'Pay fees', due: new Date(n + 40 * 60e3) },
+    { id: 2, title: 'Submit lab report', due: new Date(n + 3 * 3600e3 + 15 * 60e3) },
+    { id: 3, title: 'Call Rahul', due: tm },
+  ];
+};
+
+function chime() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    [0, 0.6, 1.2].forEach(t0 => [880, 1318.5].forEach((f, j) => {
+      const t = ctx.currentTime + t0 + j * 0.14, o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = 'sine'; o.frequency.value = f;
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.16, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.3);
+      o.connect(g).connect(ctx.destination); o.start(t); o.stop(t + 1.4);
+    }));
+  } catch (e) {}
+}
+
+const NotchPreview = ({ kind }) => {
+  const nw = 72, nh = 18;
+  return (
+    <div style={{ height: 60, borderRadius: 10, background: 'rgba(0,0,0,0.28)', position: 'relative', overflow: 'hidden', boxShadow: 'inset 0 0 0 .5px rgba(255,255,255,.08)' }}>
+      {kind === 'short' ? (
+        <div style={{ position: 'absolute', top: 0, left: '50%', width: nw + 76, marginLeft: -(nw + 76) / 2, height: nh, borderRadius: '0 0 9px 9px', background: 'rgba(58,58,64,0.95)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 7px', font: `600 8.5px ${NT.rounded}` }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 3, color: NT.label }}><Icon name="bell" size={8} color={NT.orange} stroke={2.4} />40m</span>
+          <span style={{ position: 'absolute', left: '50%', top: 0, width: nw, height: nh, marginLeft: -nw / 2, background: '#000', borderRadius: '0 0 7px 7px' }}></span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 3, color: NT.orange }}>18m<Ring size={8} stroke={1.8} progress={0.3} color={NT.orange} /></span>
+        </div>
+      ) : (
+        <svg width={nw + 8} height={nh + 4} style={{ position: 'absolute', top: 0, left: '50%', marginLeft: -(nw + 8) / 2, overflow: 'visible' }}>
+          <rect x="4" y="-8" width={nw} height={nh + 8} rx="7" fill="#000" />
+          <path d={`M2,0 L2,${nh - 7} A9,9 0 0 0 11,${nh + 2} L${nw - 3},${nh + 2} A9,9 0 0 0 ${nw + 6},${nh - 7} L${nw + 6},0`} fill="none" stroke="rgba(255,255,255,0.16)" strokeWidth="2" strokeLinecap="round" />
+          <path d={`M2,0 L2,${nh - 7} A9,9 0 0 0 11,${nh + 2} L${nw - 3},${nh + 2} A9,9 0 0 0 ${nw + 6},${nh - 7} L${nw + 6},0`} fill="none" stroke={NT.orange} strokeWidth="2" strokeLinecap="round" pathLength="100" strokeDasharray="62 100" />
+        </svg>
+      )}
+    </div>
+  );
+};
+
+const App = () => {
+  const [now, setNow] = useState(new Date());
+  const [reminders, setReminders] = useState(seedReminders);
+  const [inbox, setInbox] = useState(() => load('nw2_inbox', [
+    { id: 11, text: 'Try Figma variables for spacing tokens', t: Date.now() - 42 * 60e3 },
+    { id: 12, text: 'Ask Priya about trip dates', t: Date.now() - 3 * 3600e3 },
+  ]));
+  const [snips, setSnips] = useState(() => load('nw2_snips', [
+    { id: 21, x: 180, y: 140, w: 520, h: 320, vw: innerWidth, vh: innerHeight, t: Date.now() - 6 * 60e3 },
+    { id: 22, x: 0, y: 0, w: innerWidth, h: innerHeight, vw: innerWidth, vh: innerHeight, t: Date.now() - 55 * 60e3 },
+  ]));
+  const [snipMode, setSnipMode] = useState('area');
+  const [capturing, setCapturing] = useState(false);
+  const [flash, setFlash] = useState(0);
+  const [alertType, setAlertTypeS] = useState(() => load('nw2_alert', 'sound'));
+  const [pomo, setPomo] = useState({ phase: 'focus', cycle: 1, done: 0, running: false, endsAt: 0, remaining: FOCUS, total: FOCUS });
+  const [alarm, setAlarm] = useState(null);
+  const [guard, setGuard] = useState({ site: null, since: 0, nudging: false });
+  const [sites, setSites] = useState(() => load('nw2_sites', [{ host: 'youtube.com', min: 10 }, { host: 'x.com', min: 10 }, { host: 'reddit.com', min: 15 }]));
+  useEffect(() => save('nw2_sites', sites), [sites]);
+  const siteLimit = h => ((sites.find(s => s.host === h) || {}).min || 10);
+  const [variant, setVariantS] = useState(() => load('nw2_variant', 'short'));
+  const setVariant = v => { setVariantS(v); save('nw2_variant', v); };
+  const [hover, setHover] = useState(false);
+  const [settings, setSettings] = useState(false);
+  const [focusIn, setFocusIn] = useState(false);
+  const leaveT = useRef(), enterT = useRef();
+  useEffect(() => { if (!hover && !focusIn) setSettings(false); }, [hover, focusIn]);
+  const alertRef = useRef(alertType); alertRef.current = alertType;
+
+  const setAlertType = v => { setAlertTypeS(v); save('nw2_alert', v); };
+  useEffect(() => save('nw2_inbox', inbox), [inbox]);
+  useEffect(() => save('nw2_snips', snips), [snips]);
+
+  useEffect(() => {
+    const t = setInterval(() => {
+      const d = new Date(); setNow(d);
+      const el = document.getElementById('mb-clock');
+      if (el) el.textContent = d.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' }) + '   ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    }, 250);
+    return () => clearInterval(t);
+  }, []);
+
+  const ring = () => { if (alertRef.current === 'sound') chime(); else if (navigator.vibrate) navigator.vibrate([300, 150, 300]); };
+
+  // Pomodoro engine
+  useEffect(() => {
+    if (!pomo.running) return;
+    const rem = Math.max(0, Math.ceil((pomo.endsAt - now.getTime()) / 1000));
+    if (rem !== pomo.remaining) setPomo(p => ({ ...p, remaining: rem }));
+    if (rem === 0) {
+      setPomo(p => ({ ...p, running: false, remaining: 0, done: p.phase === 'focus' ? p.cycle : p.done }));
+      setAlarm(pomo.phase === 'focus' ? { kind: 'focusDone', cycle: pomo.cycle } : { kind: 'breakDone', nextCycle: pomo.cycle % 4 + 1 });
+      ring();
+    }
+  }, [now]);
+
+  // Distraction guard
+  useEffect(() => {
+    if (guard.site && !guard.nudging && now.getTime() - guard.since >= siteLimit(guard.site) * 60e3) setGuard(g => ({ ...g, nudging: true }));
+  }, [now]);
+
+  const start = () => setPomo(p => ({ ...p, running: true, endsAt: Date.now() + p.remaining * 1000 }));
+  const pause = () => setPomo(p => ({ ...p, running: false, remaining: Math.max(0, Math.ceil((p.endsAt - Date.now()) / 1000)) }));
+  const reset = () => setPomo(p => ({ ...p, running: false, remaining: p.total }));
+  const begin = (phase, cycle, done) => { const total = phase === 'focus' ? FOCUS : phase === 'long' ? LONG : SHORT; setPomo({ phase, cycle, done, running: true, total, remaining: total, endsAt: Date.now() + total * 1000 }); };
+  const collapse = () => { clearTimeout(enterT.current); setHover(false); setFocusIn(false); document.activeElement && document.activeElement.blur(); };
+  const alarmPrimary = () => {
+    if (alarm.kind === 'focusDone') begin(alarm.cycle === 4 ? 'long' : 'short', pomo.cycle, pomo.done);
+    else begin('focus', pomo.cycle % 4 + 1, pomo.cycle === 4 ? 0 : pomo.done);
+    setAlarm(null); collapse();
+  };
+  const alarmSecondary = () => {
+    const c = pomo.phase === 'focus' ? pomo.cycle : pomo.cycle; const nc = c % 4 + 1;
+    setPomo({ phase: 'focus', cycle: nc, done: c === 4 ? 0 : pomo.done, running: false, total: FOCUS, remaining: FOCUS, endsAt: 0 });
+    setAlarm(null); collapse();
+  };
+
+  const addReminder = ({ title, due }) => setReminders(r => [...r, { id: ++uid, title, due }]);
+
+  const doCapture = r => {
+    setCapturing(false); setFlash(f => f + 1);
+    setSnips(s => [{ id: ++uid, ...r, vw: innerWidth, vh: innerHeight, t: Date.now() }, ...s].slice(0, 4));
+  };
+  const capture = () => {
+    setHover(false); setFocusIn(false); document.activeElement && document.activeElement.blur();
+    if (snipMode === 'area') return setTimeout(() => setCapturing(true), 150);
+    const W = innerWidth, H = innerHeight;
+    setTimeout(() => doCapture(snipMode === 'screen' ? { x: 0, y: 0, w: W, h: H } : { x: W * 0.18, y: H * 0.16, w: W * 0.64, h: H * 0.66 }), 250);
+  };
+
+  const onEnter = () => { clearTimeout(leaveT.current); enterT.current = setTimeout(() => setHover(true), 80); };
+  const onLeave = () => { clearTimeout(enterT.current); leaveT.current = setTimeout(() => setHover(false), 320); };
+
+  const nowMs = now.getTime();
+  const next = reminders.filter(r => r.due > now).sort((a, b) => a.due - b.due)[0];
+  const open = !capturing && (hover || focusIn);
+  const state = alarm ? 'alarm' : open ? (settings ? 'settings' : 'open') : 'compact';
+  const compact = state === 'compact';
+  const W = state === 'open' || state === 'settings' ? Math.min(800, innerWidth - 32) : state === 'alarm' ? 640 : variant === 'short' ? HW_W + 150 : HW_W;
+  const H = state === 'open' ? 506 : state === 'settings' ? 296 : state === 'alarm' ? 150 : H0;
+  const R = state === 'compact' ? (variant === 'progress' ? '0 0 12px 12px' : '0 0 16px 16px') : '0 0 32px 32px';
+
+  const isFocus = pomo.phase === 'focus';
+  const pColor = isFocus ? NT.orange : NT.green;
+  const pActive = pomo.running || pomo.remaining !== pomo.total;
+  const shortCd = d => { const m = Math.ceil((d - now) / 60e3); return m < 60 ? `${m}m` : m < 1440 ? `${Math.floor(m / 60)}h` : `${Math.floor(m / 1440)}d`; };
+  const SEQ = ['focus', 'short', 'focus', 'short', 'focus', 'short', 'focus', 'long'];
+  const segIdx = pomo.phase === 'focus' ? 2 * (pomo.cycle - 1) : pomo.phase === 'long' ? 7 : 2 * (pomo.cycle - 1) + 1;
+  const segColor = { focus: NT.orange, short: NT.green, long: NT.teal };
+  const showBar = variant === 'progress' && compact && pActive;
+
+  return (
+    <>
+      <div style={{ position: 'relative' }}>
+      <div onMouseEnter={onEnter} onMouseLeave={onLeave}
+        onContextMenu={e => { e.preventDefault(); clearTimeout(leaveT.current); setHover(true); setSettings(true); }}
+        onFocus={e => setFocusIn(e.target.tagName === 'INPUT')} onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget)) setFocusIn(false); }}
+        className={guard.nudging ? 'nudging' : ''}
+        style={{
+          position: 'relative', width: W, height: H, borderRadius: R, overflow: 'hidden',
+          transition: `width .5s ${NT.ease}, height .5s ${NT.ease}, border-radius .5s ${NT.ease}`,
+          background: 'rgba(20,20,24,0.62)',
+          backdropFilter: 'blur(40px) saturate(1.8)', WebkitBackdropFilter: 'blur(40px) saturate(1.8)',
+          border: '0.5px solid rgba(255,255,255,0.14)', borderTop: 0,
+          boxShadow: '0 20px 50px rgba(0,0,0,0.45)',
+        }}>
+        {/* hardware notch */}
+        <div style={{ position: 'absolute', top: 0, left: '50%', width: HW_W, height: H0, marginLeft: -HW_W / 2, background: '#000', borderRadius: '0 0 12px 12px', zIndex: 3 }}></div>
+
+        {compact && variant === 'short' && <>
+          <div style={{ position: 'absolute', top: 0, left: 0, height: H0, width: `calc(50% - ${HW_W / 2}px)`, padding: '0 6px 0 14px', display: 'flex', alignItems: 'center', gap: 5, font: `600 12px ${NT.rounded}`, whiteSpace: 'nowrap', animation: 'nwFade .3s ease' }} title={next ? `${next.title} · ${fmtCountdown(next.due, now)}` : ''}>
+            {next && <><Icon name="bell" size={12} color={NT.orange} stroke={2.1} /><span style={{ color: NT.label, fontVariantNumeric: 'tabular-nums' }}>{shortCd(next.due)}</span></>}
+          </div>
+          <div style={{ position: 'absolute', top: 0, right: 0, height: H0, width: `calc(50% - ${HW_W / 2}px)`, padding: '0 14px 0 6px', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 5, font: `600 12px ${NT.rounded}`, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', animation: 'nwFade .3s ease' }}>
+            {guard.nudging
+              ? <><span style={{ color: NT.yellow }}>{siteLimit(guard.site)}m</span><span style={{ width: 7, height: 7, borderRadius: 4, background: NT.yellow, animation: 'nwPulse 3.2s ease-in-out infinite' }}></span></>
+              : <><span style={{ color: pActive ? pColor : NT.tertiary }}>{String(Math.ceil(pomo.remaining / 60))}m</span><Ring size={14} stroke={2.6} progress={1 - pomo.remaining / pomo.total} color={pColor} /></>}
+          </div>
+        </>}
+
+        {/* leading: next reminder */}
+        <div style={{ position: 'absolute', top: 0, left: 0, height: H0, width: `calc(50% - ${HW_W / 2}px)`, padding: '0 10px 0 16px', display: compact ? 'none' : 'flex', alignItems: 'center', gap: 6, font: `500 12px ${NT.font}`, letterSpacing: '-0.01em', whiteSpace: 'nowrap', overflow: 'hidden' }}>
+          {next && <>
+            <Icon name="bell" size={12} color={NT.orange} stroke={2.1} />
+            <span style={{ color: NT.label, overflow: 'hidden', textOverflow: 'ellipsis' }}>{next.title}</span>
+            <span style={{ color: NT.secondary, flexShrink: 0 }}>· {fmtCountdown(next.due, now)}</span>
+          </>}
+        </div>
+
+        {/* trailing: timer or nudge */}
+        <div style={{ position: 'absolute', top: 0, right: 0, height: H0, width: `calc(50% - ${HW_W / 2}px)`, padding: state === 'open' ? '0 44px 0 10px' : '0 16px 0 10px', display: compact ? 'none' : 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6, font: `500 12px ${NT.font}`, whiteSpace: 'nowrap', overflow: 'hidden' }}>
+          {guard.nudging ? <>
+            <span style={{ width: 6, height: 6, borderRadius: 3, background: NT.yellow, animation: 'nwPulse 3.2s ease-in-out infinite' }}></span>
+            <span style={{ color: NT.label }}>{guard.site}</span><span style={{ color: NT.secondary }}>· {siteLimit(guard.site)} min</span>
+          </> : <>
+            {pActive && <span style={{ color: isFocus ? NT.secondary : NT.green }}>{isFocus ? (pomo.running ? 'Focus' : 'Paused') : 'Break'}</span>}
+            <span style={{ font: `600 12.5px ${NT.rounded}`, fontVariantNumeric: 'tabular-nums', color: pActive ? pColor : NT.tertiary }}>{fmtMMSS(pomo.remaining)}</span>
+            <Ring size={15} stroke={2.6} progress={1 - pomo.remaining / pomo.total} color={pColor} />
+          </>}
+        </div>
+
+        {state === 'open' && <button className="nmini" title="Settings" onClick={() => setSettings(true)} style={{ position: 'absolute', top: 5, right: 14, zIndex: 4, animation: 'nwFade .3s ease' }}><Icon name="gear" size={13} stroke={1.9} /></button>}
+
+        {state === 'settings' && (
+          <div key="settings" style={{ position: 'absolute', top: H0 + 8, left: 14, right: 14, bottom: 14, display: 'flex', flexDirection: 'column', gap: 12, animation: `nwIn .4s ${NT.ease} .08s both` }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <button className="nmini" title="Back" onClick={() => setSettings(false)}><Icon name="chevronLeft" size={12} stroke={2.4} /></button>
+              <span style={{ font: `600 13px ${NT.font}`, color: NT.label }}>Settings</span>
+            </div>
+            <div className="ncard" style={{ gap: 10 }}>
+              <div>
+                <div style={{ font: `600 13px ${NT.font}`, color: NT.label }}>Resting notch</div>
+                <div style={{ font: `400 11px ${NT.font}`, color: NT.secondary, marginTop: 2 }}>What the notch shows when you’re not hovering over it.</div>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                {[{ v: 'short', t: 'Short bar', d: 'Next reminder and focus minutes beside the notch.' }, { v: 'progress', t: 'Progress outline', d: 'Just the notch. The running timer traces its edge.' }].map(o => (
+                  <button key={o.v} className="nopt" data-on={variant === o.v ? '1' : '0'} onClick={() => setVariant(o.v)}>
+                    <NotchPreview kind={o.v} />
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '0 4px 2px' }}>
+                      <span className="nradio"></span>
+                      <span>
+                        <span style={{ display: 'block', font: `500 13px ${NT.font}`, color: NT.label }}>{o.t}</span>
+                        <span style={{ display: 'block', font: `400 11px ${NT.font}`, color: NT.secondary, marginTop: 2 }}>{o.d}</span>
+                      </span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {state === 'open' && (
+          <div key="open" style={{ position: 'absolute', top: H0 + 8, left: 14, right: 14, bottom: 14, display: 'grid', gridTemplateColumns: '1.16fr 1fr 1fr', gridTemplateRows: 'auto 204px minmax(0,1fr)', gap: 12, animation: `nwIn .4s ${NT.ease} .08s both` }}>
+            <DayStrip now={now} reminders={reminders} />
+            <FocusCard pomo={pomo} onStart={start} onPause={pause} onReset={reset} alertType={alertType} setAlertType={setAlertType} />
+            <RemindersCard reminders={reminders} now={now} onAdd={addReminder} />
+            <InboxCard items={inbox} now={nowMs} onAdd={text => setInbox(i => [{ id: ++uid, text, t: Date.now() }, ...i])} onDone={id => setInbox(i => i.filter(x => x.id !== id))}
+              onRemind={it => { const p = parseReminder(it.text, new Date()); const due = p.due || (() => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0); return d; })(); addReminder({ title: p.title || it.text, due }); setInbox(i => i.filter(x => x.id !== it.id)); }} />
+            <SnipsCard snips={snips} now={nowMs} mode={snipMode} setMode={setSnipMode} onCapture={capture} onDelete={id => setSnips(s => s.filter(x => x.id !== id))} />
+            <GuardCard guard={guard} sites={sites} nowMs={nowMs} onAddSite={s => setSites(l => [...l.filter(x => x.host !== s.host), s])} onRemoveSite={host => setSites(l => l.filter(x => x.host !== host))} onDismiss={() => setGuard({ site: null, since: 0, nudging: false })} />
+          </div>
+        )}
+
+        {state === 'alarm' && (
+          <div key="alarm" style={{ position: 'absolute', top: H0, left: 0, right: 0, bottom: 0, animation: `nwIn .4s ${NT.ease} .1s both` }}>
+            <AlarmView alarm={alarm} alertType={alertType} onPrimary={alarmPrimary} onSecondary={alarmSecondary} />
+          </div>
+        )}
+      </div>
+      {(() => {
+        const sw = 3, d = 3, o = d + sw / 2, Wsv = HW_W + 2 * o, Hsv = H0 + o, x0 = o - d, x1 = Wsv - x0, yb = H0 + d, r = 12 + d;
+        const path = `M${x0},0 L${x0},${yb - r} A${r},${r} 0 0 0 ${x0 + r},${yb} L${x1 - r},${yb} A${r},${r} 0 0 0 ${x1},${yb - r} L${x1},0`;
+        const p = Math.max(0, Math.min(1, 1 - pomo.remaining / pomo.total));
+        return (
+          <svg width={Wsv} height={Hsv} title="" style={{ position: 'absolute', top: 0, left: '50%', marginLeft: -Wsv / 2, overflow: 'visible', opacity: showBar ? 1 : 0, transition: `opacity .35s ${NT.ease}`, pointerEvents: 'none', filter: 'drop-shadow(0 1px 3px rgba(0,0,0,0.4))' }}>
+            <path d={path} fill="none" stroke="rgba(255,255,255,0.16)" strokeWidth={sw} strokeLinecap="round" />
+            <path d={path} fill="none" stroke={pColor} strokeWidth={sw} strokeLinecap="round" pathLength="100" strokeDasharray={`${p * 100} 100`} style={{ opacity: pomo.running ? 1 : 0.45, transition: 'stroke-dasharray .5s linear, stroke .3s, opacity .3s' }} />
+          </svg>
+        );
+      })()}
+      </div>
+
+      {capturing && <SnipOverlay onDone={doCapture} onCancel={() => setCapturing(false)} />}
+      {flash > 0 && <div key={flash} style={{ position: 'fixed', inset: 0, background: '#fff', pointerEvents: 'none', zIndex: 3000, animation: 'nwFlash .35s ease-out forwards' }}></div>}
+
+      {ReactDOM.createPortal(
+        <div className="proto">
+          <div className="proto-t">Prototype controls</div>
+          <button className="nb nb-glass nb-sm" onClick={() => setPomo(p => ({ ...p, running: true, endsAt: Date.now() + 3000, remaining: 3 }))}>End current timer in 3s</button>
+          <button className="nb nb-glass nb-sm" disabled={!sites.length} onClick={() => sites[0] && setGuard({ site: sites[sites.length - 1].host, since: Date.now() - (sites[sites.length - 1].min * 60 - 6) * 1000, nudging: false })}>Visit {sites.length ? sites[sites.length - 1].host : 'flagged site'} </button>
+          <button className="nb nb-glass nb-sm" disabled={!guard.site} onClick={() => setGuard({ site: null, since: 0, nudging: false })}>Leave flagged site</button>
+        </div>, document.body)}
+    </>
+  );
+};
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

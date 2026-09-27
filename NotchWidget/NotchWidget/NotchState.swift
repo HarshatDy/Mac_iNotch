@@ -1,111 +1,103 @@
 import SwiftUI
-import Combine
+import AppKit
 
-// MARK: - Display state machine
+// MARK: - Model
 
-enum NotchDisplayState: Equatable {
-    case collapsed
-    case hoverCompact
-    case expanded
-    case configure
-}
+enum PomoPhase: String {
+    case focus, short, long
 
-// MARK: - Supporting types
-
-enum AccentTint: String, CaseIterable, Codable {
-    case blue, purple, green, rose, amber
-
-    var glowColor: Color {
+    var length: Int {
         switch self {
-        case .blue:   return Color(red: 0.42, green: 0.60, blue: 0.95)
-        case .purple: return Color(red: 0.65, green: 0.42, blue: 0.95)
-        case .green:  return Color(red: 0.38, green: 0.85, blue: 0.52)
-        case .rose:   return Color(red: 0.92, green: 0.38, blue: 0.58)
-        case .amber:  return Color(red: 0.98, green: 0.76, blue: 0.28)
+        case .focus: return 25 * 60
+        case .short: return 5 * 60
+        case .long:  return 15 * 60
         }
     }
 }
 
-enum WidgetID: String, CaseIterable, Codable {
-    case spotify, battery, clock, weather, wifi, cpu, ram, volume, notifications, dnd, mic
+struct Pomodoro {
+    var phase: PomoPhase = .focus
+    var cycle = 1            // 1…4
+    var done = 0             // focus sessions finished in the current set of four
+    var running = false
+    var endsAt = Date.distantPast
+    var remaining = PomoPhase.focus.length
+    var total = PomoPhase.focus.length
 
-    var label: String {
-        switch self {
-        case .spotify:       return "Spotify"
-        case .battery:       return "Battery"
-        case .clock:         return "Clock"
-        case .weather:       return "Weather"
-        case .wifi:          return "Wi-Fi"
-        case .cpu:           return "CPU"
-        case .ram:           return "Memory"
-        case .volume:        return "Volume"
-        case .notifications: return "Notifications"
-        case .dnd:           return "Focus"
-        case .mic:           return "Microphone"
-        }
-    }
-
-    var systemIcon: String {
-        switch self {
-        case .spotify:       return "music.note"
-        case .battery:       return "battery.100"
-        case .clock:         return "clock"
-        case .weather:       return "sun.max"
-        case .wifi:          return "wifi"
-        case .cpu:           return "cpu"
-        case .ram:           return "memorychip"
-        case .volume:        return "speaker.wave.2"
-        case .notifications: return "bell"
-        case .dnd:           return "moon"
-        case .mic:           return "mic"
-        }
-    }
-
-    var dotColor: Color {
-        switch self {
-        case .spotify:       return Color(hex: 0x1DB954)
-        case .battery:       return Color(hex: 0x30D158)
-        case .clock:         return .white.opacity(0.5)
-        case .weather:       return Color(hex: 0xFF9F0A)
-        case .wifi:          return Color(hex: 0x0A84FF)
-        case .cpu, .ram:     return Color(hex: 0x64B4FF)
-        case .volume:        return .white.opacity(0.5)
-        case .notifications: return Color(hex: 0xFF453A)
-        case .dnd:           return Color(hex: 0xFF9F0A)
-        case .mic:           return Color(hex: 0x30D158)
-        }
-    }
-
-    static let naturalWidths: [WidgetID: CGFloat] = [
-        .spotify: 228, .battery: 130, .clock: 90, .weather: 118,
-        .wifi: 120, .cpu: 100, .ram: 100, .volume: 100,
-        .notifications: 186, .dnd: 110, .mic: 96
-    ]
+    var isFocus: Bool  { phase == .focus }
+    var active: Bool   { running || remaining != total }
+    var idle: Bool     { !running && remaining == total }
+    var progress: Double { total > 0 ? 1 - Double(remaining) / Double(total) : 0 }
+    var color: Color   { isFocus ? NT.orange : NT.green }
 }
 
-// MARK: - Tweaks (persisted)
+enum Alarm: Equatable {
+    case focusDone(cycle: Int)
+    case breakDone(nextCycle: Int)
+}
 
-struct NotchTweaks: Codable {
-    var enabled: [String: Bool] = [
-        "spotify": true, "battery": true, "clock": true, "weather": true,
-        "wifi": false, "cpu": false, "ram": false, "volume": false,
-        "notifications": false, "dnd": false, "mic": false
-    ]
-    var accentTint: AccentTint = .blue
+struct Reminder: Codable, Identifiable {
+    var id = UUID()
+    var title: String
+    var due: Date?
+}
 
-    static let key = "notch_tweaks_v2"
+struct InboxItem: Codable, Identifiable {
+    var id = UUID()
+    var text: String
+    var t: Date
+}
 
-    static func load() -> NotchTweaks {
-        guard
-            let data = UserDefaults.standard.data(forKey: key),
-            let tweaks = try? JSONDecoder().decode(NotchTweaks.self, from: data)
-        else { return NotchTweaks() }
-        return tweaks
+struct Snip: Codable, Identifiable {
+    var id = UUID()
+    var rect: CGRect      // top-left origin, in screen points
+    var screen: CGSize    // screen size at capture time
+    var t: Date
+}
+
+/// A task the user can pick to work on, with the time they plan to spend on it.
+struct WorkTask: Codable, Identifiable, Equatable {
+    var id = UUID()
+    var title: String
+    var min: Int
+}
+
+/// The task currently being worked on; `overdue` flips once its planned time runs out.
+struct ActiveTask: Codable {
+    var title: String
+    var min: Int
+    var since: Date
+    var overdue = false
+
+    var endsAt: Date { since.addingTimeInterval(Double(min * 60)) }
+}
+
+enum RestingVariant: String, Codable { case short, progress }
+enum AlertType: String, Codable { case sound, haptic }
+enum SnipMode: String { case area, window, screen }
+enum NotchDisplay { case compact, open, settings, alarm }
+
+// MARK: - Persistence
+
+private enum Store {
+    static let reminders = "nw2_reminders"
+    static let inbox     = "nw2_inbox"
+    static let snips     = "nw2_snips"
+    static let tasks     = "nw2_tasks"
+    static let active    = "nw2_active_task"
+    static let alert     = "nw2_alert"
+    static let variant   = "nw2_variant"
+
+    static func load<T: Decodable>(_ key: String, default fallback: @autoclosure () -> T) -> T {
+        guard let data = UserDefaults.standard.data(forKey: key),
+              let value = try? JSONDecoder().decode(T.self, from: data)
+        else { return fallback() }
+        return value
     }
 
-    func save() {
-        guard let data = try? JSONEncoder().encode(self) else { return }
-        UserDefaults.standard.set(data, forKey: NotchTweaks.key)
+    static func save<T: Encodable>(_ key: String, _ value: T) {
+        guard let data = try? JSONEncoder().encode(value) else { return }
+        UserDefaults.standard.set(data, forKey: key)
     }
 }
 
@@ -116,149 +108,353 @@ struct NotchTweaks: Codable {
 final class NotchState {
     static let shared = NotchState()
 
-    // UI state
-    var displayState: NotchDisplayState = .collapsed
+    // Physical notch + screen (kept current by NotchWindowController)
+    var hwWidth: CGFloat = 184
+    var hwHeight: CGFloat = 32
+    var screenSize = CGSize(width: 1440, height: 900)
+    var wallpaper: NSImage?
 
-    // Persisted tweaks
-    var tweaks: NotchTweaks = .load() {
-        didSet { tweaks.save() }
+    private(set) var now = Date()
+
+    // Persisted
+    var reminders: [Reminder]    { didSet { Store.save(Store.reminders, reminders) } }
+    var inbox: [InboxItem]       { didSet { Store.save(Store.inbox, inbox) } }
+    var snips: [Snip]            { didSet { Store.save(Store.snips, snips) } }
+    var tasks: [WorkTask]        { didSet { Store.save(Store.tasks, tasks) } }
+    var activeTask: ActiveTask?  { didSet { Store.save(Store.active, activeTask) } }
+    var alertType: AlertType     { didSet { Store.save(Store.alert, alertType) } }
+    var variant: RestingVariant  { didSet { Store.save(Store.variant, variant) } }
+
+    // Transient
+    var pomo = Pomodoro()
+    var alarm: Alarm?
+    var snipMode: SnipMode = .area
+    var capturing = false
+    var showSettings = false
+    private(set) var hover = false { didSet { syncSettings() } }
+    private var focusedInputs: Set<String> = []
+
+    // Hooks installed by the window layer
+    @ObservationIgnored var captureHandler: ((SnipMode) -> Void)?
+    @ObservationIgnored var resignInputFocus: (() -> Void)?
+
+    @ObservationIgnored private var enterTask: Task<Void, Never>?
+    @ObservationIgnored private var leaveTask: Task<Void, Never>?
+    @ObservationIgnored private var ticker: Timer?
+
+    private init() {
+        let now = Date()
+        reminders = Store.load(Store.reminders, default: Self.seedReminders(now))
+        inbox = Store.load(Store.inbox, default: [
+            InboxItem(text: "Try Figma variables for spacing tokens", t: now.addingTimeInterval(-42 * 60)),
+            InboxItem(text: "Ask Priya about trip dates", t: now.addingTimeInterval(-3 * 3600)),
+        ])
+        snips = Store.load(Store.snips, default: [
+            Snip(rect: CGRect(x: 180, y: 140, width: 520, height: 320), screen: CGSize(width: 1440, height: 900), t: now.addingTimeInterval(-6 * 60)),
+            Snip(rect: CGRect(x: 0, y: 0, width: 1440, height: 900), screen: CGSize(width: 1440, height: 900), t: now.addingTimeInterval(-55 * 60)),
+        ])
+        tasks = Store.load(Store.tasks, default: [
+            WorkTask(title: "Write project brief", min: 45),
+            WorkTask(title: "Review PRs", min: 20),
+            WorkTask(title: "Reply to emails", min: 15),
+        ])
+        activeTask = Store.load(Store.active, default: nil)
+        alertType = Store.load(Store.alert, default: .sound)
+        variant = Store.load(Store.variant, default: .short)
+        startTicker()
     }
 
-    // Runtime widget state
-    var playing = true
-    var trackIndex = 0
-    var volume: Double = 62
-    var dndEnabled = false
-    var dndUntil = "1 hour"
-    var micActive = false
-
-    // Hover timers
-    private var enterTask: Task<Void, Never>?
-    private var leaveTask: Task<Void, Never>?
-
-    var enabledWidgets: [WidgetID] {
-        WidgetID.allCases.filter { tweaks.enabled[$0.rawValue] == true }
+    private static func seedReminders(_ now: Date) -> [Reminder] {
+        let cal = Calendar.current
+        let tomorrow = cal.date(byAdding: .day, value: 1, to: now) ?? now
+        let tomorrow6pm = cal.date(bySettingHour: 18, minute: 0, second: 0, of: tomorrow)
+        return [
+            Reminder(title: "Pay fees", due: now.addingTimeInterval(40 * 60)),
+            Reminder(title: "Submit lab report", due: now.addingTimeInterval(3 * 3600 + 15 * 60)),
+            Reminder(title: "Call Rahul", due: tomorrow6pm),
+        ]
     }
 
-    func isEnabled(_ id: WidgetID) -> Bool {
-        tweaks.enabled[id.rawValue] == true
+    // MARK: - Derived
+
+    var inputFocused: Bool { !focusedInputs.isEmpty }
+    var isOpen: Bool { !capturing && (hover || inputFocused) }
+
+    var display: NotchDisplay {
+        if alarm != nil { return .alarm }
+        if isOpen { return showSettings ? .settings : .open }
+        return .compact
     }
 
-    func toggleWidget(_ id: WidgetID) {
-        tweaks.enabled[id.rawValue] = !(tweaks.enabled[id.rawValue] ?? false)
-    }
+    /// A physical notch taller than the design's 32pt pushes the panel content down by the difference.
+    private var extraTop: CGFloat { max(0, hwHeight - 32) }
 
-    // MARK: - Hover handling
-
-    func handleMouseEnter() {
-        leaveTask?.cancel()
-        if displayState == .collapsed {
-            displayState = .hoverCompact
+    var width: CGFloat {
+        switch display {
+        case .open, .settings: return min(800, screenSize.width - 32)
+        case .alarm:           return 640
+        case .compact:         return variant == .short ? hwWidth + 150 : hwWidth
         }
+    }
+
+    var height: CGFloat {
+        switch display {
+        case .open:     return 506 + extraTop
+        case .settings: return 296 + extraTop
+        case .alarm:    return 150 + extraTop
+        case .compact:  return hwHeight
+        }
+    }
+
+    var radius: CGFloat {
+        display == .compact ? (variant == .progress ? 12 : 16) : 32
+    }
+
+    var nextReminder: Reminder? {
+        upcomingReminders.first
+    }
+
+    var upcomingReminders: [Reminder] {
+        reminders
+            .compactMap { r in r.due.map { (r, $0) } }
+            .filter { $0.1 > now }
+            .sorted { $0.1 < $1.1 }
+            .map(\.0)
+    }
+
+    var showProgressOutline: Bool {
+        variant == .progress && display == .compact && (pomo.active || workActive)
+    }
+
+    var taskOverdue: Bool { activeTask?.overdue == true }
+    var workActive: Bool { activeTask != nil }
+
+    /// 0…1 share of the working-on task's planned time that has elapsed.
+    var workProgress: Double {
+        guard let t = activeTask else { return 0 }
+        return max(0, min(1, now.timeIntervalSince(t.since) / Double(t.min * 60)))
+    }
+
+    var workRemaining: Int {
+        guard let t = activeTask else { return 0 }
+        return max(0, Int(ceil(t.endsAt.timeIntervalSince(now))))
+    }
+
+    /// Work timer colour: teal while running (distinct from Pomodoro orange/green), yellow once time's up.
+    var workColor: Color { taskOverdue ? NT.yellow : NT.teal }
+
+    // MARK: - Clock / engines
+
+    private func startTicker() {
+        let t = Timer(timeInterval: 0.25, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.tick() }
+        }
+        RunLoop.main.add(t, forMode: .common)
+        ticker = t
+    }
+
+    private func tick() {
+        let d = Date()
+        if Int(d.timeIntervalSince1970) != Int(now.timeIntervalSince1970) { now = d }
+
+        // Pomodoro engine
+        if pomo.running {
+            let rem = max(0, Int(ceil(pomo.endsAt.timeIntervalSince(d))))
+            if rem != pomo.remaining { pomo.remaining = rem }
+            if rem == 0 { finishPhase() }
+        }
+
+        // Working-on task timer (the system notification is scheduled separately in startTask)
+        if let task = activeTask, !task.overdue, d >= task.endsAt {
+            activeTask?.overdue = true
+        }
+    }
+
+    private func finishPhase() {
+        let finished = pomo
+        pomo.running = false
+        pomo.remaining = 0
+        if finished.isFocus { pomo.done = finished.cycle }
+        alarm = finished.isFocus
+            ? .focusDone(cycle: finished.cycle)
+            : .breakDone(nextCycle: finished.cycle % 4 + 1)
+        Alerts.play(alertType)
+    }
+
+    // MARK: - Pomodoro actions
+
+    func start() {
+        pomo.running = true
+        pomo.endsAt = Date().addingTimeInterval(TimeInterval(pomo.remaining))
+    }
+
+    func pause() {
+        pomo.remaining = max(0, Int(ceil(pomo.endsAt.timeIntervalSinceNow)))
+        pomo.running = false
+    }
+
+    func reset() {
+        pomo.running = false
+        pomo.remaining = pomo.total
+    }
+
+    private func begin(_ phase: PomoPhase, cycle: Int, done: Int) {
+        let total = phase.length
+        pomo = Pomodoro(phase: phase, cycle: cycle, done: done, running: true,
+                        endsAt: Date().addingTimeInterval(TimeInterval(total)),
+                        remaining: total, total: total)
+    }
+
+    func alarmPrimary() {
+        guard let alarm else { return }
+        switch alarm {
+        case .focusDone(let cycle):
+            begin(cycle == 4 ? .long : .short, cycle: pomo.cycle, done: pomo.done)
+        case .breakDone:
+            begin(.focus, cycle: pomo.cycle % 4 + 1, done: pomo.cycle == 4 ? 0 : pomo.done)
+        }
+        self.alarm = nil
+        collapse()
+    }
+
+    func alarmSecondary() {
+        let c = pomo.cycle
+        pomo = Pomodoro(phase: .focus, cycle: c % 4 + 1, done: c == 4 ? 0 : pomo.done)
+        alarm = nil
+        collapse()
+    }
+
+    // MARK: - Reminders / Inbox
+
+    func addReminder(title: String, due: Date?) {
+        reminders.append(Reminder(title: title, due: due))
+    }
+
+    func addInbox(_ text: String) {
+        inbox.insert(InboxItem(text: text, t: Date()), at: 0)
+    }
+
+    func completeInbox(_ id: UUID) {
+        inbox.removeAll { $0.id == id }
+    }
+
+    /// Turns an inbox thought into a reminder; falls back to tomorrow 9 AM when no time is mentioned.
+    func remind(_ item: InboxItem) {
+        let p = ReminderParser.parse(item.text, now: Date())
+        let due = p.due ?? {
+            let cal = Calendar.current
+            let tomorrow = cal.date(byAdding: .day, value: 1, to: Date()) ?? Date()
+            return cal.date(bySettingHour: 9, minute: 0, second: 0, of: tomorrow) ?? tomorrow
+        }()
+        addReminder(title: p.title.isEmpty ? item.text : p.title, due: due)
+        completeInbox(item.id)
+    }
+
+    // MARK: - Snips
+
+    func capture() {
+        hover = false
+        clearInputFocus()
+        captureHandler?(snipMode)
+    }
+
+    func finishCapture(_ rect: CGRect, screen: CGSize) {
+        capturing = false
+        snips = Array(([Snip(rect: rect, screen: screen, t: Date())] + snips).prefix(4))
+    }
+
+    func deleteSnip(_ id: UUID) {
+        snips.removeAll { $0.id == id }
+    }
+
+    // MARK: - Up Next
+
+    func deleteReminder(_ id: UUID) {
+        reminders.removeAll { $0.id == id }
+    }
+
+    // MARK: - Working on
+
+    func addTask(_ task: WorkTask) {
+        tasks = tasks.filter { $0.title.caseInsensitiveCompare(task.title) != .orderedSame } + [task]
+    }
+
+    func removeTask(_ id: UUID) {
+        tasks.removeAll { $0.id == id }
+    }
+
+    func startTask(_ task: WorkTask, since: Date = Date()) {
+        let active = ActiveTask(title: task.title, min: task.min, since: since)
+        activeTask = active
+        TaskNotifier.schedule(title: active.title, minutes: active.min, at: active.endsAt)
+    }
+
+    func finishTask() {
+        activeTask = nil
+        TaskNotifier.cancel()
+    }
+
+    // MARK: - Prototype controls (menu bar, DEBUG builds)
+
+    func simulateTimerEnd() {
+        pomo.running = true
+        pomo.endsAt = Date().addingTimeInterval(3)
+        pomo.remaining = 3
+    }
+
+    /// Starts the last task with only 6 seconds of its planned time left.
+    func simulateTaskEnding() {
+        guard let task = tasks.last else { return }
+        startTask(task, since: Date().addingTimeInterval(-Double(task.min * 60 - 6)))
+    }
+
+    // MARK: - Hover / focus
+
+    func pointerEntered() {
+        leaveTask?.cancel()
+        enterTask?.cancel()
         enterTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(90))
+            try? await Task.sleep(for: .milliseconds(80))
             guard !Task.isCancelled else { return }
-            await MainActor.run {
-                if self?.displayState == .hoverCompact {
-                    self?.displayState = .expanded
-                }
-            }
+            self?.hover = true
         }
     }
 
-    func handleMouseLeave() {
-        enterTask?.cancel()
-        guard displayState != .configure else { return }
-        leaveTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(280))
-            guard !Task.isCancelled else { return }
-            await MainActor.run {
-                if self?.displayState != .configure {
-                    self?.displayState = .collapsed
-                }
-            }
-        }
-    }
-
-    func openConfigure() {
+    func pointerExited() {
         enterTask?.cancel()
         leaveTask?.cancel()
-        withAnimation(notchAnimation) {
-            displayState = .configure
+        leaveTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(320))
+            guard !Task.isCancelled else { return }
+            self?.hover = false
         }
     }
 
-    func closeConfigure() {
-        withAnimation(notchAnimation) {
-            displayState = .collapsed
-        }
+    /// Right-click on the notch jumps straight to Settings.
+    func openSettings() {
+        leaveTask?.cancel()
+        hover = true
+        showSettings = true
     }
 
-    // MARK: - Geometry
-
-    var notchWidth: CGFloat {
-        switch displayState {
-        case .collapsed:    return 158
-        case .hoverCompact: return 192
-        case .expanded:     return computedExpandedWidth
-        case .configure:    return 520
-        }
+    func collapse() {
+        enterTask?.cancel()
+        hover = false
+        clearInputFocus()
     }
 
-    var notchHeight: CGFloat {
-        switch displayState {
-        case .collapsed:    return 30
-        case .hoverCompact: return 36
-        case .expanded:     return 160
-        case .configure:    return 190
-        }
+    func setInputFocus(_ id: String, _ focused: Bool) {
+        if focused { focusedInputs.insert(id) } else { focusedInputs.remove(id) }
+        syncSettings()
     }
 
-    var notchRadius: CGFloat {
-        switch displayState {
-        case .collapsed:    return 16
-        case .hoverCompact: return 18
-        case .expanded:     return 24
-        case .configure:    return 22
-        }
+    func clearInputFocus() {
+        focusedInputs.removeAll()
+        resignInputFocus?()
+        syncSettings()
     }
 
-    var computedExpandedWidth: CGFloat {
-        let screenWidth = NSScreen.main?.frame.width ?? 1440
-        let maxW = min(900, screenWidth - 80)
-        let widgets = enabledWidgets
-        guard !widgets.isEmpty else { return 280 }
-        let naturalTotal = widgets.enumerated().reduce(0.0) { sum, pair in
-            let (i, w) = pair
-            return sum + (WidgetID.naturalWidths[w] ?? 100) + (i > 0 ? 29.0 : 0)
-        }
-        return min(maxW, max(280, naturalTotal + 40))
-    }
-
-    var scaleFactor: CGFloat {
-        let available = computedExpandedWidth - 40
-        let widgets = enabledWidgets
-        guard !widgets.isEmpty else { return 1 }
-        let natural = widgets.enumerated().reduce(0.0) { sum, pair in
-            let (i, w) = pair
-            return sum + (WidgetID.naturalWidths[w] ?? 100) + (i > 0 ? 29.0 : 0)
-        }
-        return natural > available ? available / natural : 1.0
-    }
-}
-
-// MARK: - Shared animation curve (cubic-bezier(0.4,0,0.2,1))
-
-let notchAnimation = Animation.timingCurve(0.4, 0, 0.2, 1, duration: 0.35)
-let notchHeightAnimation = Animation.timingCurve(0.4, 0, 0.2, 1, duration: 0.32)
-
-// MARK: - Color convenience
-
-extension Color {
-    init(hex: UInt32) {
-        let r = Double((hex >> 16) & 0xFF) / 255
-        let g = Double((hex >> 8)  & 0xFF) / 255
-        let b = Double(hex         & 0xFF) / 255
-        self.init(red: r, green: g, blue: b)
+    private func syncSettings() {
+        if !hover && !inputFocused { showSettings = false }
     }
 }
