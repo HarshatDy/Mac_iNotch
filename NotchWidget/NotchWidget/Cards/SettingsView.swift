@@ -40,6 +40,8 @@ struct SettingsView: View {
             .background(RoundedRectangle(cornerRadius: 18).fill(Color.white.opacity(0.055)))
             .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5))
 
+            ReminderSyncSection()
+
             Spacer(minLength: 0)
         }
     }
@@ -151,5 +153,55 @@ private struct NotchPreview: View {
         p.addArc(tangent1End: CGPoint(x: nw + 6, y: nh + 2), tangent2End: CGPoint(x: nw + 6, y: 0), radius: 9)
         p.addLine(to: CGPoint(x: nw + 6, y: 0))
         return p
+    }
+}
+
+/// Status of the Apple Reminders bridge that carries alerts to iPhone and Apple Watch.
+private struct ReminderSyncSection: View {
+    private let sync = ReminderSync.shared
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text("iPhone & Apple Watch")
+                        .font(NT.font(13, .semibold))
+                        .foregroundStyle(NT.label)
+                    if sync.isActive {
+                        Circle().fill(NT.green).frame(width: 6, height: 6)
+                        Text("Syncing").font(NT.font(11, .medium)).foregroundStyle(NT.green)
+                    }
+                }
+                Text(detail)
+                    .font(NT.font(11))
+                    .foregroundStyle(NT.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            switch sync.access {
+            case .notDetermined:
+                Btn(variant: .prom, small: true, title: "Turn On") { sync.requestAccess() }
+            case .denied:
+                Btn(variant: .glass, small: true, title: "Allow in Settings") { sync.openPrivacySettings() }
+            case .granted:
+                EmptyView()
+            }
+        }
+        .padding(12)
+        .background(RoundedRectangle(cornerRadius: 18).fill(Color.white.opacity(0.055)))
+        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5))
+    }
+
+    private var detail: String {
+        switch sync.access {
+        case .notDetermined:
+            return "Sync Up Next, Brain Dump and timer alerts through Apple Reminders so they reach your iPhone and Watch."
+        case .denied:
+            return "Notcheee needs access to Reminders to send alerts to your iPhone and Watch."
+        case .granted:
+            if let error = sync.lastError, !sync.ready { return error }
+            return "Via Apple Reminders: “\(ReminderSync.upNextName)”, “\(ReminderSync.brainDumpName)” and “\(ReminderSync.timersName)” lists. Tip: turn off Reminders notifications on this Mac to avoid double alerts."
+        }
     }
 }

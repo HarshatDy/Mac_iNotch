@@ -2,33 +2,47 @@ import AppKit
 import AVFoundation
 import UserNotifications
 
-/// Break-alert feedback: the prototype's two-tone chime, or a haptic tap.
+/// Alarm feedback: the prototype's two-tone chime, or a haptic tap, repeated until `stop()`.
 @MainActor
 enum Alerts {
     private static var player: AVAudioPlayer?
+    private static var hapticLoop: Task<Void, Never>?
     private static let chime = makeChimeWAV()
 
-    static func play(_ type: AlertType) {
+    /// Starts ringing; keeps going until `stop()` is called (i.e. the alarm is acknowledged).
+    static func start(_ type: AlertType) {
+        stop()
         switch type {
         case .sound:
             player = try? AVAudioPlayer(data: chime)
+            player?.numberOfLoops = -1
             player?.play()
         case .haptic:
             // There is no public API to tap an Apple Watch from macOS; the Force Touch trackpad stands in.
             let performer = NSHapticFeedbackManager.defaultPerformer
-            for i in 0..<3 {
-                Task {
-                    try? await Task.sleep(for: .milliseconds(300 * i))
-                    performer.perform(.generic, performanceTime: .now)
+            hapticLoop = Task {
+                while !Task.isCancelled {
+                    for _ in 0..<3 {
+                        performer.perform(.generic, performanceTime: .now)
+                        try? await Task.sleep(for: .milliseconds(300))
+                    }
+                    try? await Task.sleep(for: .seconds(2))
                 }
             }
         }
     }
 
+    static func stop() {
+        player?.stop()
+        player = nil
+        hapticLoop?.cancel()
+        hapticLoop = nil
+    }
+
     /// Three rings of an A5 + E6 sine pair: 10ms attack to 0.16, exponential decay over 1.3s.
     private static func makeChimeWAV() -> Data {
         let sampleRate = 44_100.0
-        let count = Int(sampleRate * 2.8)
+        let count = Int(sampleRate * 3.8)   // last ring fades by ~2.75s; the rest is the gap before it loops
         var samples = [Double](repeating: 0, count: count)
 
         for t0 in [0.0, 0.6, 1.2] {
@@ -83,5 +97,37 @@ enum TaskNotifier {
         let center = UNUserNotificationCenter.current()
         center.removePendingNotificationRequests(withIdentifiers: [id])
         center.removeDeliveredNotifications(withIdentifiers: [id])
+    }
+}
+
+/// System notifications mirroring each timed reminder's alarm, so it still fires if the app isn't running.
+/// While the app is running these are suppressed in favour of the in-notch alarm (see AppDelegate).
+enum ReminderNotifier {
+    static let prefix = "reminder-"
+
+    /// Replaces every pending reminder notification with one per future, alarm-on reminder.
+    static func sync(_ reminders: [Reminder]) {
+        let wanted: [(id: String, title: String, body: String, due: Date)] = reminders.compactMap { r in
+            guard r.alarm, let due = r.due, due > Date() else { return nil }
+            return (prefix + r.id.uuidString, r.title, "Reminder · \(Fmt.time(due))", due)
+        }
+        let center = UNUserNotificationCenter.current()
+        center.getPendingNotificationRequests { pending in
+            let stale = pending.map(\.identifier).filter { $0.hasPrefix(prefix) }
+            center.removePendingNotificationRequests(withIdentifiers: stale)
+            guard !wanted.isEmpty else { return }
+            center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
+                guard granted else { return }
+                for (id, title, body, due) in wanted {
+                    let content = UNMutableNotificationContent()
+                    content.title = title
+                    content.body = body
+                    content.sound = .default
+                    let parts = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute, .second], from: due)
+                    let trigger = UNCalendarNotificationTrigger(dateMatching: parts, repeats: false)
+                    center.add(UNNotificationRequest(identifier: id, content: content, trigger: trigger))
+                }
+            }
+        }
     }
 }

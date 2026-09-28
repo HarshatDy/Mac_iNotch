@@ -80,17 +80,36 @@ struct RemindersCard: View {
     }
 }
 
-// MARK: - Rows (hover reveals a delete button)
+// MARK: - Rows (hover reveals alarm toggle + delete)
 
-private struct DeleteReminderButton: View {
+private struct ReminderRowButtons: View {
     @Environment(NotchState.self) private var state
-    let id: UUID
+    let reminder: Reminder
     var size: CGFloat = 22
 
     var body: some View {
-        Button { state.deleteReminder(id) } label: { Icon(name: .xmark, size: size * 0.5, stroke: 2.2) }
+        HStack(spacing: 2) {
+            Button { state.toggleReminderAlarm(reminder.id) } label: {
+                Icon(name: reminder.alarm ? .bell : .bellSlash, size: size * 0.5, stroke: 2.2)
+            }
             .buttonStyle(MiniButtonStyle(size: size))
-            .help("Delete reminder")
+            .help(reminder.alarm ? "Turn off alarm" : "Turn on alarm")
+            Button { state.deleteReminder(reminder.id) } label: { Icon(name: .xmark, size: size * 0.5, stroke: 2.2) }
+                .buttonStyle(MiniButtonStyle(size: size))
+                .help("Delete reminder")
+        }
+    }
+}
+
+/// Small bell after the due time: filled when an alarm is set, slashed when it's off.
+private struct AlarmBadge: View {
+    let on: Bool
+
+    var body: some View {
+        Image(systemName: on ? "bell.fill" : "bell.slash")
+            .font(.system(size: 9, weight: .semibold))
+            .foregroundStyle(on ? NT.secondary : NT.tertiary)
+            .help(on ? "Alarm set" : "Alarm off")
     }
 }
 
@@ -102,21 +121,23 @@ private struct NextReminder: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(reminder.title)
+            Marquee(text: reminder.title)
                 .font(NT.font(15, .semibold))
                 .tracking(-0.22)
                 .foregroundStyle(NT.label)
-                .lineLimit(1)
-                .padding(.trailing, hovering ? 26 : 0)   // keep the title clear of the ✕ while it shows
-            Text("\(Text(Fmt.countdown(due, state.now)).fontWeight(.medium).foregroundStyle(NT.orange)) · \(Fmt.time(due))")
-                .font(NT.font(12))
-                .foregroundStyle(NT.secondary)
-                .lineLimit(1)
+                .padding(.trailing, hovering ? 50 : 0)   // keep the title clear of the buttons while they show
+            HStack(spacing: 5) {
+                Text("\(Text(Fmt.countdown(due, state.now)).fontWeight(.medium).foregroundStyle(NT.orange)) · \(Fmt.time(due))")
+                    .font(NT.font(12))
+                    .foregroundStyle(NT.secondary)
+                    .lineLimit(1)
+                AlarmBadge(on: reminder.alarm)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
         .overlay(alignment: .topTrailing) {
-            DeleteReminderButton(id: reminder.id)
+            ReminderRowButtons(reminder: reminder)
                 .opacity(hovering ? 1 : 0)
                 .allowsHitTesting(hovering)
         }
@@ -132,13 +153,15 @@ private struct LaterReminderRow: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Text(reminder.title)
+            Marquee(text: reminder.title)
                 .foregroundStyle(NT.label)
-                .frame(maxWidth: .infinity, alignment: .leading)
             if let due = reminder.due {
-                Text(Fmt.due(due, state.now))
-                    .foregroundStyle(NT.tertiary)
-                    .opacity(hovering ? 0 : 1)
+                HStack(spacing: 4) {
+                    Text(Fmt.due(due, state.now))
+                        .foregroundStyle(NT.tertiary)
+                    AlarmBadge(on: reminder.alarm)
+                }
+                .opacity(hovering ? 0 : 1)
             }
         }
         .font(NT.font(12))
@@ -146,7 +169,7 @@ private struct LaterReminderRow: View {
         .frame(height: 18)
         .contentShape(Rectangle())
         .overlay(alignment: .trailing) {
-            DeleteReminderButton(id: reminder.id, size: 18)
+            ReminderRowButtons(reminder: reminder, size: 18)
                 .opacity(hovering ? 1 : 0)
                 .allowsHitTesting(hovering)
         }
