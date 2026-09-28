@@ -43,6 +43,8 @@ struct Reminder: Codable, Identifiable {
     var due: Date?
     /// Rings (in the notch, plus a system notification as backup) when `due` arrives.
     var alarm = true
+    /// Identifier of the matching item in Apple Reminders (nil until synced).
+    var ekID: String?
 
     init(title: String, due: Date?, alarm: Bool = true) {
         self.title = title
@@ -57,6 +59,7 @@ struct Reminder: Codable, Identifiable {
         title = try c.decode(String.self, forKey: .title)
         due = try c.decodeIfPresent(Date.self, forKey: .due)
         alarm = try c.decodeIfPresent(Bool.self, forKey: .alarm) ?? true
+        ekID = try c.decodeIfPresent(String.self, forKey: .ekID)
     }
 }
 
@@ -64,6 +67,8 @@ struct InboxItem: Codable, Identifiable {
     var id = UUID()
     var text: String
     var t: Date
+    /// Identifier of the matching item in the "Brain Dump" Reminders list (nil until synced).
+    var ekID: String?
 }
 
 struct Snip: Codable, Identifiable {
@@ -135,16 +140,22 @@ final class NotchState {
     private(set) var now = Date()
 
     // Persisted
-    var reminders: [Reminder]    { didSet { Store.save(Store.reminders, reminders); ReminderNotifier.sync(reminders) } }
+    var reminders: [Reminder] {
+        didSet {
+            Store.save(Store.reminders, reminders)
+            // Once synced to Apple Reminders, the Reminders app itself alerts when Notcheee isn't running.
+            ReminderNotifier.sync(ReminderSync.shared.isActive ? [] : reminders)
+        }
+    }
     var inbox: [InboxItem]       { didSet { Store.save(Store.inbox, inbox) } }
     var snips: [Snip]            { didSet { Store.save(Store.snips, snips) } }
     var tasks: [WorkTask]        { didSet { Store.save(Store.tasks, tasks) } }
-    var activeTask: ActiveTask?  { didSet { Store.save(Store.active, activeTask) } }
+    var activeTask: ActiveTask?  { didSet { Store.save(Store.active, activeTask); syncWorkTimer() } }
     var alertType: AlertType     { didSet { Store.save(Store.alert, alertType) } }
     var variant: RestingVariant  { didSet { Store.save(Store.variant, variant) } }
 
     // Transient
-    var pomo = Pomodoro()
+    var pomo = Pomodoro() { didSet { syncPomodoroTimer() } }
     var alarm: Alarm?
     /// Alarms that fired while another one was showing.
     private var alarmQueue: [Alarm] = []
@@ -223,7 +234,7 @@ final class NotchState {
     var height: CGFloat {
         switch display {
         case .open:     return 506 + extraTop
-        case .settings: return 296 + extraTop
+        case .settings: return 400 + extraTop
         case .alarm:    return 150 + extraTop
         case .compact:  return hwHeight
         }
@@ -365,6 +376,7 @@ final class NotchState {
         case .breakDone:
             begin(.focus, cycle: pomo.cycle % 4 + 1, done: pomo.cycle == 4 ? 0 : pomo.done)
         case .reminder(let id, _):
+            ReminderSync.shared.complete(reminders.first { $0.id == id }?.ekID)
             reminders.removeAll { $0.id == id }
         }
         dismissAlarm()
@@ -388,19 +400,25 @@ final class NotchState {
         guard let i = reminders.firstIndex(where: { $0.id == id }) else { return }
         reminders[i].due = Date().addingTimeInterval(Double(Self.snoozeMinutes * 60))
         reminders[i].alarm = true
+        reminders[i].ekID = ReminderSync.shared.saveReminder(reminders[i])
     }
 
     // MARK: - Reminders / Inbox
 
     func addReminder(title: String, due: Date?) {
-        reminders.append(Reminder(title: title, due: due))
+        var r = Reminder(title: title, due: due)
+        r.ekID = ReminderSync.shared.saveReminder(r)
+        reminders.append(r)
     }
 
     func addInbox(_ text: String) {
-        inbox.insert(InboxItem(text: text, t: Date()), at: 0)
+        var item = InboxItem(text: text, t: Date())
+        item.ekID = ReminderSync.shared.saveInbox(item)
+        inbox.insert(item, at: 0)
     }
 
     func completeInbox(_ id: UUID) {
+        ReminderSync.shared.complete(inbox.first { $0.id == id }?.ekID)
         inbox.removeAll { $0.id == id }
     }
 
@@ -412,8 +430,64 @@ final class NotchState {
             let tomorrow = cal.date(byAdding: .day, value: 1, to: Date()) ?? Date()
             return cal.date(bySettingHour: 9, minute: 0, second: 0, of: tomorrow) ?? tomorrow
         }()
-        addReminder(title: p.title.isEmpty ? item.text : p.title, due: due)
-        completeInbox(item.id)
+        let title = p.title.isEmpty ? item.text : p.title
+        if let ekID = item.ekID, let moved = ReminderSync.shared.moveToUpNext(ekID, title: title, due: due) {
+            // Same Reminders item, moved from the Brain Dump list to Notcheee with a due time.
+            var r = Reminder(title: title, due: due)
+            r.ekID = moved
+            reminders.append(r)
+            inbox.removeAll { $0.id == item.id }
+        } else {
+            addReminder(title: title, due: due)
+            completeInbox(item.id)
+        }
+    }
+
+    // MARK: - Apple Reminders sync
+
+    /// Replaces the local lists with what's in Apple Reminders, keeping local IDs stable for the UI.
+    func applyRemote(upNext: [SyncedItem], brainDump: [SyncedItem]) {
+        let reminderIDs = Dictionary(reminders.compactMap { r in r.ekID.map { ($0, r.id) } }, uniquingKeysWith: { a, _ in a })
+        reminders = upNext.map { item in
+            var r = Reminder(title: item.title, due: item.due, alarm: item.hasAlarm)
+            r.id = reminderIDs[item.ekID] ?? UUID()
+            r.ekID = item.ekID
+            return r
+        }
+
+        let inboxIDs = Dictionary(inbox.compactMap { i in i.ekID.map { ($0, i.id) } }, uniquingKeysWith: { a, _ in a })
+        let times = Dictionary(inbox.compactMap { i in i.ekID.map { ($0, i.t) } }, uniquingKeysWith: { a, _ in a })
+        inbox = brainDump
+            .map { item in
+                InboxItem(id: inboxIDs[item.ekID] ?? UUID(), text: item.title,
+                          t: times[item.ekID] ?? item.created ?? Date(), ekID: item.ekID)
+            }
+            .sorted { $0.t > $1.t }
+
+        // Drop alarms for reminders that were completed or deleted elsewhere.
+        let live = Set(reminders.map(\.id))
+        alarmQueue.removeAll { if case .reminder(let id, _) = $0 { !live.contains(id) } else { false } }
+        if case .reminder(let id, _) = alarm, !live.contains(id) { dismissAlarm() }
+    }
+
+    /// Re-sends both timers (after sync turns on, or on launch).
+    func resyncTimers() {
+        syncPomodoroTimer()
+        syncWorkTimer()
+    }
+
+    private func syncPomodoroTimer() {
+        ReminderSync.shared.setTimer(.pomodoro, pomo.running
+            ? (pomo.isFocus ? "Focus session complete — take a break" : "Break’s over — back to focus", pomo.endsAt)
+            : nil)
+    }
+
+    private func syncWorkTimer() {
+        guard let task = activeTask, !task.overdue else {
+            ReminderSync.shared.setTimer(.work, nil)
+            return
+        }
+        ReminderSync.shared.setTimer(.work, ("Time’s up: \(task.title)", task.endsAt))
     }
 
     // MARK: - Snips
@@ -436,6 +510,7 @@ final class NotchState {
     // MARK: - Up Next
 
     func deleteReminder(_ id: UUID) {
+        ReminderSync.shared.remove(reminders.first { $0.id == id }?.ekID)
         reminders.removeAll { $0.id == id }
         alarmQueue.removeAll { if case .reminder(id, _) = $0 { true } else { false } }
         if case .reminder(id, _) = alarm { dismissAlarm() }
@@ -444,6 +519,7 @@ final class NotchState {
     func toggleReminderAlarm(_ id: UUID) {
         guard let i = reminders.firstIndex(where: { $0.id == id }) else { return }
         reminders[i].alarm.toggle()
+        reminders[i].ekID = ReminderSync.shared.saveReminder(reminders[i])
     }
 
     // MARK: - Working on
