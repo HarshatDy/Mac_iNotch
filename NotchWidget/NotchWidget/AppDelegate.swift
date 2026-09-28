@@ -15,6 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         if CalendarService.shared.access == .notDetermined {
             CalendarService.shared.requestAccess()
         }
+        ReminderSync.shared.start(state: NotchState.shared)
     }
 
     /// Show the "Working On" time's-up banner even while the app counts as frontmost.

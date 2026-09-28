@@ -56,9 +56,32 @@ design_handoff_notch_widget/
 │       │                            Snips, Work, Alarm, Settings)
 │       ├── Info.plist
 │       └── NotchWidget.entitlements
+├── scripts/install.sh               Build + install into /Applications in one step
 ├── mac-os-widgets/                  Design handoff (V2) the app is built from
 └── docs/design-handoff-v1.md        Earlier (V1) design handoff, kept for reference
 ```
+
+---
+
+## Quick install (build + install in one step)
+
+From the repository root:
+
+```bash
+scripts/install.sh
+```
+
+This builds a Release copy, quits Notcheee if it's running, replaces (or adds)
+`/Applications/Notcheee.app`, and launches it. Run it again any time to update to your latest code.
+
+| Option | Effect |
+|---|---|
+| `--debug` | Build the Debug configuration (adds the menu bar *Prototype controls*) |
+| `--no-launch` | Install without opening the app |
+
+If `/Applications` isn't writable for your account, run it with `sudo`.
+
+The manual steps below do the same thing by hand.
 
 ---
 
@@ -130,7 +153,8 @@ menu bar for quitting.
 
 ### Update to a newer build
 
-Quit Notcheee, rebuild, and run the `ditto` command again. Your data and permissions carry over.
+Run `scripts/install.sh` again — or quit Notcheee, rebuild, and repeat the `ditto` command.
+Your data and permissions carry over.
 
 ---
 

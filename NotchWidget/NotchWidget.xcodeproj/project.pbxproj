@@ -25,6 +25,8 @@
 		AA000511AAAAAAAAAAAA0002 /* AlarmView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000511AAAAAAAAAAAA0001 /* AlarmView.swift */; };
 		AA000512AAAAAAAAAAAA0002 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000512AAAAAAAAAAAA0001 /* SettingsView.swift */; };
 		AA000513AAAAAAAAAAAA0002 /* CalendarService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000513AAAAAAAAAAAA0001 /* CalendarService.swift */; };
+		AA000514AAAAAAAAAAAA0002 /* ReminderSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000514AAAAAAAAAAAA0001; };
+		AA000515AAAAAAAAAAAA0002 /* UrgentReminders.m in Sources */ = {isa = PBXBuildFile; fileRef = AA000515AAAAAAAAAAAA0001; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -49,6 +51,10 @@
 		AA000511AAAAAAAAAAAA0001 /* AlarmView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlarmView.swift; sourceTree = "<group>"; };
 		AA000512AAAAAAAAAAAA0001 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		AA000513AAAAAAAAAAAA0001 /* CalendarService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarService.swift; sourceTree = "<group>"; };
+		AA000514AAAAAAAAAAAA0001 /* ReminderSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReminderSync.swift; sourceTree = "<group>"; };
+		AA000515AAAAAAAAAAAA0001 /* UrgentReminders.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = UrgentReminders.m; sourceTree = "<group>"; };
+		AA000516AAAAAAAAAAAA0001 /* UrgentReminders.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = UrgentReminders.h; sourceTree = "<group>"; };
+		AA000517AAAAAAAAAAAA0001 /* NotchWidget-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "NotchWidget-Bridging-Header.h"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -91,6 +97,10 @@
 				AA000503AAAAAAAAAAAA0001 /* Alerts.swift */,
 				AA000504AAAAAAAAAAAA0001 /* SnipCapture.swift */,
 				AA000513AAAAAAAAAAAA0001 /* CalendarService.swift */,
+				AA000514AAAAAAAAAAAA0001 /* ReminderSync.swift */,
+				AA000516AAAAAAAAAAAA0001 /* UrgentReminders.h */,
+				AA000515AAAAAAAAAAAA0001 /* UrgentReminders.m */,
+				AA000517AAAAAAAAAAAA0001 /* NotchWidget-Bridging-Header.h */,
 				AA000500AAAAAAAAAAAA0001 /* Cards */,
 				AA000125AAAAAAAAAAAA0001 /* Info.plist */,
 				AA000126AAAAAAAAAAAA0001 /* NotchWidget.entitlements */,
@@ -187,6 +197,8 @@
 				AA000104AAAAAAAAAAAA0002 /* NotchState.swift in Sources */,
 				AA000105AAAAAAAAAAAA0002 /* NotchContainerView.swift in Sources */,
 				AA000513AAAAAAAAAAAA0002 /* CalendarService.swift in Sources */,
+				AA000514AAAAAAAAAAAA0002 /* ReminderSync.swift in Sources */,
+				AA000515AAAAAAAAAAAA0002 /* UrgentReminders.m in Sources */,
 				AA000501AAAAAAAAAAAA0002 /* Theme.swift in Sources */,
 				AA000502AAAAAAAAAAAA0002 /* Formatting.swift in Sources */,
 				AA000503AAAAAAAAAAAA0002 /* Alerts.swift in Sources */,
@@ -334,6 +346,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.harshat.NotchWidget;
 				PRODUCT_NAME = Notcheee;
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "NotchWidget/NotchWidget-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 			};
 			name = Debug;
@@ -356,6 +369,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.harshat.NotchWidget;
 				PRODUCT_NAME = Notcheee;
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "NotchWidget/NotchWidget-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 			};
 			name = Release;

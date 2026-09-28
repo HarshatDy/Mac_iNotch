@@ -22,6 +22,10 @@
 	<string>1</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
+	<key>NSRemindersFullAccessUsageDescription</key>
+	<string>Notcheee keeps Up Next, Brain Dump and timer alerts in Apple Reminders so they sync to your iPhone and Apple Watch.</string>
+	<key>NSRemindersUsageDescription</key>
+	<string>Notcheee keeps Up Next, Brain Dump and timer alerts in Apple Reminders so they sync to your iPhone and Apple Watch.</string>
 	<key>NSCalendarsFullAccessUsageDescription</key>
 	<string>Notcheee shows today’s events from Apple Calendar in the notch.</string>
 	<key>NSCalendarsUsageDescription</key>
